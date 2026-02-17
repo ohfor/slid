@@ -1,0 +1,109 @@
+#include "ConfigState.h"
+#include "ContainerScanner.h"
+#include "FilterRegistry.h"
+#include "NetworkManager.h"
+#include "TranslationService.h"
+
+namespace ConfigState {
+
+    // --- Network context ---
+    static std::string  s_networkName;
+    static RE::FormID   s_masterFormID = 0;
+
+    // --- Network context ---
+
+    void SetContext(const std::string& a_networkName, RE::FormID a_masterFormID) {
+        s_networkName = a_networkName;
+        s_masterFormID = a_masterFormID;
+    }
+
+    const std::string& GetNetworkName() { return s_networkName; }
+    RE::FormID GetMasterFormID() { return s_masterFormID; }
+
+    // --- Network data loading ---
+
+    static int CountTotalItems(RE::FormID a_containerID) {
+        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_containerID);
+        if (!ref) return 0;
+        int count = 0;
+        auto inv = ref->GetInventory();
+        for (auto& [item, data] : inv) {
+            if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
+            count += data.first;
+        }
+        return count;
+    }
+
+    LoadedNetwork BuildFromNetwork() {
+        LoadedNetwork result;
+        auto* net = NetworkManager::GetSingleton()->FindNetwork(s_networkName);
+
+        if (!net) {
+            // No network configured — default catch-all is Keep (master)
+            result.catchAll.containerName = T("$SLID_Keep");
+            result.catchAll.containerFormID = s_masterFormID;
+            result.catchAll.location = "";
+            result.catchAll.count = 0;
+            return result;
+        }
+
+        result.hasNetwork = true;
+
+        // Build filter stages
+        for (const auto& filter : net->filters) {
+            LoadedStage stage;
+            stage.filterID = filter.filterID;
+            auto* regFilter = FilterRegistry::GetSingleton()->GetFilter(filter.filterID);
+            stage.name = regFilter ? std::string(regFilter->GetDisplayName()) : filter.filterID;
+
+            if (filter.containerFormID == s_masterFormID && filter.containerFormID != 0) {
+                // "Keep" — items stay in master, no separate container to count
+                stage.containerName = T("$SLID_Keep");
+                stage.containerFormID = filter.containerFormID;
+                stage.location = "";
+                stage.count = 0;
+            } else if (filter.containerFormID != 0) {
+                auto [cName, cLoc] = ContainerScanner::ResolveContainerInfo(filter.containerFormID);
+                stage.containerName = cName;
+                stage.containerFormID = filter.containerFormID;
+                stage.location = cLoc;
+                stage.count = CountTotalItems(filter.containerFormID);
+            } else {
+                // "Pass" — filter skipped
+                stage.containerName = T("$SLID_Pass");
+                stage.containerFormID = 0;
+                stage.location = "";
+                stage.count = 0;
+            }
+            result.stages.push_back(std::move(stage));
+        }
+
+        // Build catch-all
+        if (net->catchAllFormID != 0 && net->catchAllFormID != s_masterFormID) {
+            auto [cName, cLoc] = ContainerScanner::ResolveContainerInfo(net->catchAllFormID);
+            result.catchAll.containerName = cName;
+            result.catchAll.containerFormID = net->catchAllFormID;
+            result.catchAll.location = cLoc;
+            result.catchAll.count = CountTotalItems(net->catchAllFormID);
+        } else {
+            // Keep — catch-all routes to master (or no catch-all configured)
+            result.catchAll.containerFormID = s_masterFormID;
+            result.catchAll.containerName = T("$SLID_Keep");
+            result.catchAll.location = "";
+            result.catchAll.count = 0;
+        }
+
+        return result;
+    }
+
+    // --- Commit ---
+
+    void CommitToNetwork(const std::string& a_networkName,
+                         const std::vector<FilterStage>& a_filters,
+                         RE::FormID a_catchAllFormID) {
+        auto* mgr = NetworkManager::GetSingleton();
+        mgr->SetFilterConfig(a_networkName, a_filters, a_catchAllFormID);
+        logger::debug("CommitToNetwork: saved {} filters, catchAll={:08X} to network '{}'",
+                     a_filters.size(), a_catchAllFormID, a_networkName);
+    }
+}

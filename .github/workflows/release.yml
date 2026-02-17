@@ -1,0 +1,215 @@
+# Build and release on version tag
+#
+# Triggered when a version tag is pushed to the public repo.
+# Builds the DLL, packages distribution zips, creates GitHub release.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write  # Required for creating releases and uploading assets
+
+jobs:
+  build:
+    runs-on: windows-latest
+    if: github.repository == 'ohfor/slid'  # Only run in public repo
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version_num=${VERSION#v}" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Clone vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          ./vcpkg/bootstrap-vcpkg.bat
+
+      - name: Configure CMake
+        run: |
+          cmake --preset release
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+
+      - name: Build DLL
+        run: |
+          cmake --build build/release --config Release
+
+      - name: Verify DLL built
+        shell: bash
+        run: |
+          if [ ! -f "build/release/Release/SLID.dll" ]; then
+            echo "::error::DLL build failed - file not found"
+            exit 1
+          fi
+          echo "DLL built successfully"
+
+      - name: Verify version consistency
+        shell: pwsh
+        run: |
+          $tagVersion = "${{ steps.version.outputs.version_num }}"
+          $failed = $false
+
+          Write-Host "Tag version: $tagVersion"
+          Write-Host ""
+
+          # 1. Version.h
+          $versionH = Get-Content include/Version.h -Raw
+          if ($versionH -match 'MAJOR\s*=\s*(\d+)') { $major = $matches[1] }
+          if ($versionH -match 'MINOR\s*=\s*(\d+)') { $minor = $matches[1] }
+          if ($versionH -match 'PATCH\s*=\s*(\d+)') { $patch = $matches[1] }
+          $vH = "$major.$minor.$patch"
+          if ($vH -ne $tagVersion) {
+            Write-Host "::error::Version.h: $vH (expected $tagVersion)"
+            $failed = $true
+          } else {
+            Write-Host "Version.h: $vH"
+          }
+
+          # 2. CMakeLists.txt
+          $cmake = Get-Content CMakeLists.txt -Raw
+          if ($cmake -match 'VERSION_MAJOR\s+(\d+)') { $cmMajor = $matches[1] }
+          if ($cmake -match 'VERSION_MINOR\s+(\d+)') { $cmMinor = $matches[1] }
+          if ($cmake -match 'VERSION_PATCH\s+(\d+)') { $cmPatch = $matches[1] }
+          $vCmake = "$cmMajor.$cmMinor.$cmPatch"
+          if ($vCmake -ne $tagVersion) {
+            Write-Host "::error::CMakeLists.txt: $vCmake (expected $tagVersion)"
+            $failed = $true
+          } else {
+            Write-Host "CMakeLists.txt: $vCmake"
+          }
+
+          # 3. vcpkg.json
+          $vcpkg = Get-Content vcpkg.json -Raw
+          if ($vcpkg -match '"version-string"\s*:\s*"(\d+\.\d+\.\d+)"') {
+            $vVcpkg = $matches[1]
+          }
+          if ($vVcpkg -ne $tagVersion) {
+            Write-Host "::error::vcpkg.json: $vVcpkg (expected $tagVersion)"
+            $failed = $true
+          } else {
+            Write-Host "vcpkg.json: $vVcpkg"
+          }
+
+          # 4. version.rc
+          $vrc = Get-Content version.rc -Raw
+          if ($vrc -match '"FileVersion",\s*"(\d+\.\d+\.\d+)') {
+            $vRc = $matches[1]
+          }
+          if ($vRc -ne $tagVersion) {
+            Write-Host "::error::version.rc: $vRc (expected $tagVersion)"
+            $failed = $true
+          } else {
+            Write-Host "version.rc: $vRc"
+          }
+
+          if ($failed) {
+            Write-Host ""
+            Write-Error "Version mismatch detected! Update all version files before tagging."
+            exit 1
+          }
+
+          Write-Host ""
+          Write-Host "All version files consistent: $tagVersion"
+
+      - name: Build SLID-Main package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $staging = "assets/SLID-Main"
+
+          # Clean staging
+          if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+
+          # Copy dist/ structure (already has correct Nexus layout)
+          Copy-Item "dist/*" $staging -Recurse
+
+          # Add built DLL
+          Copy-Item "build/release/Release/SLID.dll" "$staging/SKSE/Plugins/"
+
+          # Create zip (from staging contents, not staging folder)
+          $zipPath = "assets/SLID-Main-$version.zip"
+          if (Test-Path $zipPath) { Remove-Item $zipPath }
+          Compress-Archive -Path "$staging/*" -DestinationPath $zipPath
+
+          # Verify no Data/ wrapper
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+          $hasData = $zip.Entries | Where-Object { $_.FullName -like "Data/*" -or $_.FullName -like "Data\*" }
+          $zip.Dispose()
+
+          if ($hasData) {
+            Write-Error "Archive contains Data/ wrapper - this is wrong!"
+            exit 1
+          }
+
+          Write-Host "Created: $zipPath"
+
+      - name: Verify SLID-Babel package
+        shell: pwsh
+        run: |
+          # Pre-built babel zip is synced from private repo
+          if (-not (Test-Path "assets/SLID-Babel.zip")) {
+            Write-Error "SLID-Babel.zip not found - rebuild locally and commit"
+            exit 1
+          }
+
+          Write-Host "Found: assets/SLID-Babel.zip"
+
+      - name: Extract release notes
+        id: release_notes
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version_num }}"
+
+          # CHANGELOG must exist
+          if [ ! -f "docs/CHANGELOG.md" ]; then
+            echo "::error::CHANGELOG.md not found in docs/"
+            echo "::error::A release without a changelog is not a release."
+            exit 1
+          fi
+
+          # Extract section for this version
+          NOTES=$(awk -v ver="$VERSION" '
+            /^## \[/ {
+              if (found) exit
+              if (index($0, "["ver"]")) found=1
+            }
+            found && !/^## \[/ { print }
+          ' docs/CHANGELOG.md)
+
+          # Changelog entry must exist for this version
+          if [ -z "$NOTES" ]; then
+            echo "::error::No changelog entry found for version $VERSION"
+            echo "::error::Add a ## [$VERSION] section to docs/CHANGELOG.md before tagging."
+            exit 1
+          fi
+
+          # Write to file for multi-line handling
+          echo "$NOTES" > release_notes.md
+          echo "Release notes extracted for $VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "SLID ${{ steps.version.outputs.version }}"
+          body_path: release_notes.md
+          files: |
+            assets/SLID-Main-${{ steps.version.outputs.version }}.zip
+            assets/SLID-Babel.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

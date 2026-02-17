@@ -1,0 +1,57 @@
+# Build outputs
+build/
+out/
+mods/
+assets/*
+!assets/.gitkeep
+!assets/SLID-Babel.zip
+!assets/archive/
+assets/archive/*
+!assets/archive/.gitkeep
+*.pdb
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE
+.vs/
+.vscode/
+*.user
+CMakeUserPresets.json
+
+# Claude Code local settings (machine-specific paths)
+.claude/
+.mcp.json
+todo/
+
+# Temp files
+*.tmp
+*.log
+replacements.txt
+
+# ESP/ESM files from other mods (dropped in for analysis)
+*.esp
+*.esm
+!dist/*.esp
+
+# Compiled Papyrus scripts in game folder (repo tracks its own compiled/ dir)
+# *.pex  — uncomment if you don't track compiled scripts in repo
+
+# Private markers (escape hatch for one-off private files)
+*.private.*
+
+# Downloaded tools (JPEXS, etc.)
+.private/tools/
+
+# SWF files - track our compiled output, ignore downloaded templates
+!swf/SLIDConfig.swf
+
+# Environment
+.env
+.env.local
+
+# OS
+Thumbs.db
+.DS_Store

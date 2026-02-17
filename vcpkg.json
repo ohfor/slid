@@ -1,0 +1,14 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+    "name": "slid",
+    "version-string": "1.0.0",
+    "description": "SKSE plugin for Skyrim SE/AE/VR",
+    "license": "MIT",
+    "builtin-baseline": "66c0373dc7fca549e5803087b9487edfe3aca0a1",
+    "dependencies": [
+        "minhook",
+        "rapidcsv",
+        "spdlog",
+        "xbyak"
+    ]
+}
