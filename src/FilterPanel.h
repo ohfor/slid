@@ -71,6 +71,7 @@ namespace FilterPanel {
     // --- Lifecycle ---
 
     void Init(RE::GFxMovieView* a_movie, const Callbacks& a_callbacks);
+    void LoadFromNetwork();  // load network data into panels (call after CatchAllPanel::Init)
     void Destroy();
     void Draw();         // initial row creation, scrollbar, add row
     bool Update();       // per-frame: animations, count flash, hold-A, hold-remove. Returns true if predictions were recalculated.

@@ -1,4 +1,5 @@
 #include "ContainerScanner.h"
+#include "ContainerRegistry.h"
 #include "NetworkManager.h"
 #include "Settings.h"
 #include "SCIEIntegration.h"
@@ -84,137 +85,13 @@ namespace ContainerScanner {
     }
 
     std::pair<std::string, std::string> ResolveContainerInfo(RE::FormID a_formID) {
-        if (a_formID == 0) return {"Unknown", ""};
-
-        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
-        if (!ref) return {"Unknown", ""};
-
-        // Check tag registry first — tagged containers use their custom name
-        auto tagName = NetworkManager::GetSingleton()->GetTagName(a_formID);
-
-        // Get base object name as fallback
-        std::string name = T("$SLID_Container");
-        if (!tagName.empty()) {
-            name = tagName;
-        } else if (auto* base = ref->GetBaseObject()) {
-            if (base->GetName() && base->GetName()[0] != '\0') {
-                name = base->GetName();
-            }
-        }
-
-        // Get parent cell name for location
-        std::string location;
-        auto* cell = ref->GetParentCell();
-        if (cell && cell->GetFullName() && cell->GetFullName()[0] != '\0') {
-            location = cell->GetFullName();
-        }
-
-        return {name, location};
+        // Delegate to ContainerRegistry
+        auto display = ContainerRegistry::GetSingleton()->Resolve(a_formID);
+        return {display.name, display.location};
     }
 
-    std::vector<PickerEntry> BuildContainerList(RE::FormID a_masterFormID, bool a_includeMaster) {
-        std::vector<PickerEntry> result;
-
-        auto* mgr = NetworkManager::GetSingleton();
-        std::set<RE::FormID> addedIDs;
-
-        // --- Group 0: Special entries (Keep / Pass / Sell) ---
-
-        // Keep — items stay in master container
-        if (a_masterFormID != 0) {
-            result.push_back({T("$SLID_Keep"), "", a_masterFormID, false, 0x88CC88, 0, true});
-            addedIDs.insert(a_masterFormID);
-        }
-
-        // Pass — filter skipped, items fall through to next filter
-        result.push_back({T("$SLID_Pass"), "", 0, false, 0xDDAA44, 0, true});
-
-        // Sell Container — always shown; disabled when none designated
-        auto sellFormID = mgr->GetSellContainerFormID();
-        if (sellFormID != 0 && sellFormID != a_masterFormID) {
-            auto [sellName, sellLoc] = ResolveContainerInfo(sellFormID);
-            result.push_back({T("$SLID_SellContainer"), sellLoc, sellFormID, false, 0x88BBDD, 0, true});
-            addedIDs.insert(sellFormID);
-        } else {
-            result.push_back({T("$SLID_SellContainer"), "", 0, false, 0x555555, 0, false});
-        }
-
-        // --- Group 1: Tagged containers ---
-        const auto& tags = mgr->GetTagRegistry();
-        std::vector<PickerEntry> taggedEntries;
-
-        for (const auto& [formID, tag] : tags) {
-            if (formID == a_masterFormID) continue;
-            if (addedIDs.count(formID)) continue;
-            auto [cName, cLoc] = ResolveContainerInfo(formID);
-            std::string displayName = tag.customName.empty() ? cName : tag.customName;
-            taggedEntries.push_back({displayName, cLoc, formID, true, 0, 1, true});
-            addedIDs.insert(formID);
-        }
-
-        std::sort(taggedEntries.begin(), taggedEntries.end(),
-            [](const PickerEntry& a, const PickerEntry& b) { return a.name < b.name; });
-        for (auto& e : taggedEntries) result.push_back(std::move(e));
-
-        // --- Group 2: SCIE containers (only if setting enabled and SCIE installed) ---
-        if (Settings::bSCIEIncludeContainers && SCIEIntegration::IsInstalled()) {
-            std::vector<PickerEntry> scieEntries;
-
-            const auto& scieContainers = SCIEIntegration::GetCachedContainers();
-            for (auto formID : scieContainers) {
-                if (addedIDs.count(formID)) continue;
-                if (formID == a_masterFormID) continue;
-
-                auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(formID);
-                if (!ref) continue;
-
-                std::string name = "SCIE Container";
-                if (auto* base = ref->GetBaseObject()) {
-                    if (base->GetName() && base->GetName()[0] != '\0') {
-                        name = base->GetName();
-                    }
-                }
-
-                // Get location
-                std::string location;
-                if (auto* cell = ref->GetParentCell()) {
-                    if (cell->GetFullName() && cell->GetFullName()[0] != '\0') {
-                        location = cell->GetFullName();
-                    }
-                }
-
-                // Group 2 for SCIE, with a distinct color (light purple)
-                scieEntries.push_back({name, location, formID, false, 0xBB99DD, 2, true});
-                addedIDs.insert(formID);
-            }
-
-            std::sort(scieEntries.begin(), scieEntries.end(),
-                [](const PickerEntry& a, const PickerEntry& b) { return a.name < b.name; });
-            for (auto& e : scieEntries) result.push_back(std::move(e));
-        }
-
-        // --- Group 3: Scanned containers (only if setting enabled) ---
-        if (Settings::bIncludeUnlinkedContainers) {
-            const auto& kGenericNames = Settings::sGenericContainerNames;
-            std::vector<PickerEntry> scannedEntries;
-
-            auto scanned = ScanCellContainers(a_includeMaster ? 0 : a_masterFormID);
-            for (const auto& sc : scanned) {
-                if (addedIDs.count(sc.formID)) continue;
-                bool isGeneric = false;
-                for (const auto& g : kGenericNames) {
-                    if (sc.gameName == g) { isGeneric = true; break; }
-                }
-                if (isGeneric) continue;
-                scannedEntries.push_back({sc.gameName, sc.cellName, sc.formID, false, 0, 3, true});
-                addedIDs.insert(sc.formID);
-            }
-
-            std::sort(scannedEntries.begin(), scannedEntries.end(),
-                [](const PickerEntry& a, const PickerEntry& b) { return a.name < b.name; });
-            for (auto& e : scannedEntries) result.push_back(std::move(e));
-        }
-
-        return result;
+    std::vector<PickerEntry> BuildContainerList(RE::FormID a_masterFormID, [[maybe_unused]] bool a_includeMaster) {
+        // Delegate to ContainerRegistry
+        return ContainerRegistry::GetSingleton()->BuildPickerList(a_masterFormID);
     }
 }

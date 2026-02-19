@@ -4,6 +4,7 @@ out/
 mods/
 assets/*
 !assets/.gitkeep
+!assets/SLID-Main-v*.zip
 !assets/SLID-Babel.zip
 !assets/archive/
 assets/archive/*

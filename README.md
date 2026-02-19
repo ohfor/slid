@@ -12,6 +12,7 @@ Intelligent storage management for Skyrim SE/AE. Create storage networks that au
 - **Summoned chest** - Access your master container from anywhere with a 2-minute conjured chest
 - **LOTD integration** - Museum-needed items filter to a dedicated container (requires TCC)
 - **SCIE integration** - Link containers work as crafting sources, SCIE containers can join Links
+- **Follower storage** - [NFF](https://www.nexusmods.com/skyrimspecialedition/mods/55653) and [KWF](https://www.nexusmods.com/skyrimspecialedition/mods/2227) follower containers appear in the picker (auto-detected)
 - **Custom config menu** - Scaleform UI with drag-to-reorder filter priority
 - **SkyUI MCM** - 7 configuration pages for settings, sales, compatibility, and maintenance
 - **13 languages** - English plus 12 translations in optional Babel package

@@ -1,7 +1,7 @@
 #include "CatchAllPanel.h"
 #include "ActivationHook.h"
 #include "ConfigState.h"
-#include "ContainerScanner.h"
+#include "ContainerRegistry.h"
 #include "Dropdown.h"
 #include "NetworkManager.h"
 #include "ScaleformUtil.h"
@@ -56,6 +56,11 @@ namespace CatchAllPanel {
         auto sellFormID = NetworkManager::GetSingleton()->GetSellContainerFormID();
         if (s_containerFormID == sellFormID && sellFormID != 0)
             return COLOR_SELL;
+        if (s_containerFormID != 0) {
+            auto display = ContainerRegistry::GetSingleton()->Resolve(s_containerFormID);
+            if (display.color != 0)
+                return display.color;
+        }
         return 0;  // default linked color
     }
 
@@ -199,7 +204,7 @@ namespace CatchAllPanel {
         if (!s_movie) return;
 
         // Build dropdown entries — no Pass for catch-all (items must route somewhere)
-        auto pickerEntries = ContainerScanner::BuildContainerList(s_masterFormID, false);
+        auto pickerEntries = ContainerRegistry::GetSingleton()->BuildPickerList(s_masterFormID);
         if (pickerEntries.empty()) return;
 
         std::vector<Dropdown::Entry> entries;
@@ -313,16 +318,6 @@ namespace CatchAllPanel {
     void SetCatchAll(const std::string& a_name, RE::FormID a_formID,
                      const std::string& a_location, int a_count) {
         s_predictedCount = -1;
-
-        // Validate container still exists — revert to Keep (master) if gone
-        // (e.g., sell container decommissioned, or ref no longer in loaded data)
-        if (a_formID != 0 && a_formID != s_masterFormID) {
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
-            if (!ref) {
-                logger::warn("CatchAllPanel::SetCatchAll: container {:08X} not found, reverting to Keep", a_formID);
-                a_formID = s_masterFormID;
-            }
-        }
 
         // Resolve display
         if (a_formID == s_masterFormID && a_formID != 0) {
@@ -452,10 +447,16 @@ namespace CatchAllPanel {
                                 s_selected);
 
         // Count — Keep has no separate container, show only prediction (no delta)
+        // Unavailable containers show no count or prediction
         {
             bool isKeep = (s_containerFormID == s_masterFormID && s_containerFormID != 0);
-            int displayCount = isKeep ? 0 : s_count;
-            int displayPredicted = s_predictedCount;
+            bool available = isKeep;
+            if (!isKeep && s_containerFormID != 0) {
+                auto display = ContainerRegistry::GetSingleton()->Resolve(s_containerFormID);
+                available = display.available;
+            }
+            int displayCount = (!available) ? 0 : (isKeep ? 0 : s_count);
+            int displayPredicted = available ? s_predictedCount : -1;
 
             // Keep: flatten prediction into count (never show delta arrow)
             if (isKeep) {
@@ -631,9 +632,9 @@ namespace CatchAllPanel {
             s_containerName = T("$SLID_Keep");
             s_location = "";
         } else {
-            auto [name, loc] = ContainerScanner::ResolveContainerInfo(newFormID);
-            s_containerName = name;
-            s_location = loc;
+            auto display = ContainerRegistry::GetSingleton()->Resolve(newFormID);
+            s_containerName = display.name;
+            s_location = display.location;
         }
         s_dropdown.SetValue(
             std::to_string(s_containerFormID),
@@ -644,14 +645,7 @@ namespace CatchAllPanel {
         // Count items — Keep has no separate container, skip counting master
         s_count = 0;
         if (newFormID != s_masterFormID) {
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(s_containerFormID);
-            if (ref) {
-                auto inv = ref->GetInventory();
-                for (auto& [item, data] : inv) {
-                    if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                    s_count += data.first;
-                }
-            }
+            s_count = ContainerRegistry::GetSingleton()->CountItems(s_containerFormID);
         }
 
         if (s_callbacks.commitToNetwork) s_callbacks.commitToNetwork();

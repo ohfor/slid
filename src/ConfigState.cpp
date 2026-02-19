@@ -1,5 +1,5 @@
 #include "ConfigState.h"
-#include "ContainerScanner.h"
+#include "ContainerRegistry.h"
 #include "FilterRegistry.h"
 #include "NetworkManager.h"
 #include "TranslationService.h"
@@ -22,21 +22,10 @@ namespace ConfigState {
 
     // --- Network data loading ---
 
-    static int CountTotalItems(RE::FormID a_containerID) {
-        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_containerID);
-        if (!ref) return 0;
-        int count = 0;
-        auto inv = ref->GetInventory();
-        for (auto& [item, data] : inv) {
-            if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-            count += data.first;
-        }
-        return count;
-    }
-
     LoadedNetwork BuildFromNetwork() {
         LoadedNetwork result;
         auto* net = NetworkManager::GetSingleton()->FindNetwork(s_networkName);
+        auto* registry = ContainerRegistry::GetSingleton();
 
         if (!net) {
             // No network configured — default catch-all is Keep (master)
@@ -63,11 +52,11 @@ namespace ConfigState {
                 stage.location = "";
                 stage.count = 0;
             } else if (filter.containerFormID != 0) {
-                auto [cName, cLoc] = ContainerScanner::ResolveContainerInfo(filter.containerFormID);
-                stage.containerName = cName;
+                auto display = registry->Resolve(filter.containerFormID);
+                stage.containerName = display.name;
                 stage.containerFormID = filter.containerFormID;
-                stage.location = cLoc;
-                stage.count = CountTotalItems(filter.containerFormID);
+                stage.location = display.location;
+                stage.count = registry->CountItems(filter.containerFormID);
             } else {
                 // "Pass" — filter skipped
                 stage.containerName = T("$SLID_Pass");
@@ -80,11 +69,11 @@ namespace ConfigState {
 
         // Build catch-all
         if (net->catchAllFormID != 0 && net->catchAllFormID != s_masterFormID) {
-            auto [cName, cLoc] = ContainerScanner::ResolveContainerInfo(net->catchAllFormID);
-            result.catchAll.containerName = cName;
+            auto display = registry->Resolve(net->catchAllFormID);
+            result.catchAll.containerName = display.name;
             result.catchAll.containerFormID = net->catchAllFormID;
-            result.catchAll.location = cLoc;
-            result.catchAll.count = CountTotalItems(net->catchAllFormID);
+            result.catchAll.location = display.location;
+            result.catchAll.count = registry->CountItems(net->catchAllFormID);
         } else {
             // Keep — catch-all routes to master (or no catch-all configured)
             result.catchAll.containerFormID = s_masterFormID;

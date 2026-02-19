@@ -1,4 +1,5 @@
 #include "Distributor.h"
+#include "ContainerRegistry.h"
 #include "FilterRegistry.h"
 #include "NetworkManager.h"
 #include "VendorRegistry.h"
@@ -120,6 +121,65 @@ namespace Distributor {
         return s_cobjSetsCache;
     }
 
+    // --- Pipeline pre-processing ---
+    // Resolves container availability ONCE, before the engine runs.
+    // Unavailable containers become Pass (containerFormID = 0).
+    // This is the single point where ContainerRegistry is consulted.
+
+    struct EffectivePipeline {
+        std::vector<FilterStage> filters;
+        RE::FormID catchAllFormID = 0;
+    };
+
+    static EffectivePipeline ResolveEffectivePipeline(
+        const std::vector<FilterStage>& a_filters,
+        RE::FormID a_catchAllFormID,
+        RE::FormID a_masterFormID) {
+
+        auto* registry = ContainerRegistry::GetSingleton();
+        EffectivePipeline result;
+        result.filters.reserve(a_filters.size());
+
+        for (const auto& stage : a_filters) {
+            FilterStage effective;
+            effective.filterID = stage.filterID;
+
+            if (stage.containerFormID == 0 || stage.containerFormID == a_masterFormID) {
+                // Pass or Keep — no availability check needed
+                effective.containerFormID = stage.containerFormID;
+            } else {
+                auto display = registry->Resolve(stage.containerFormID);
+                if (display.available) {
+                    effective.containerFormID = stage.containerFormID;
+                } else {
+                    logger::debug("ResolveEffectivePipeline: container {:08X} ({}) unavailable — treating as Pass",
+                                 stage.containerFormID, display.name);
+                    effective.containerFormID = 0;
+                }
+            }
+            result.filters.push_back(std::move(effective));
+        }
+
+        // Resolve catch-all
+        if (a_catchAllFormID != 0 && a_catchAllFormID != a_masterFormID) {
+            auto display = registry->Resolve(a_catchAllFormID);
+            if (display.available) {
+                result.catchAllFormID = a_catchAllFormID;
+            } else {
+                logger::debug("ResolveEffectivePipeline: catch-all {:08X} ({}) unavailable — treating as Keep",
+                             a_catchAllFormID, display.name);
+                result.catchAllFormID = 0;
+            }
+        } else {
+            result.catchAllFormID = a_catchAllFormID;
+        }
+
+        return result;
+    }
+
+    // --- Pipeline engine ---
+    // Pure engine: trusts its inputs. No availability checks, no ContainerRegistry calls.
+
     PipelineResult RunPipeline(
         const std::vector<FilterStage>& a_filters,
         RE::FormID a_catchAllFormID,
@@ -154,7 +214,7 @@ namespace Distributor {
             int firstMatch = -1;
 
             for (size_t i = 0; i < a_filters.size(); ++i) {
-                // Unlinked filters are invisible to the pipeline
+                // Unlinked filters (Pass) are invisible to the pipeline
                 if (a_filters[i].containerFormID == 0) continue;
 
                 auto* filter = registry->GetFilter(a_filters[i].filterID);
@@ -190,30 +250,12 @@ namespace Distributor {
         return result;
     }
 
-    uint32_t GatherToMaster(const std::string& a_networkName) {
-        auto* mgr = NetworkManager::GetSingleton();
-        auto* net = mgr->FindNetwork(a_networkName);
-        if (!net) {
-            logger::error("GatherToMaster: network '{}' not found", a_networkName);
-            return 0;
-        }
-
-        auto* masterRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(net->masterFormID);
-        if (!masterRef) {
-            logger::error("GatherToMaster: master container {:08X} not found", net->masterFormID);
-            return 0;
-        }
-
-        // Collect all pipeline containers (filters + catch-all, excluding master itself)
-        std::set<RE::FormID> activeContainers;
-        for (const auto& filter : net->filters) {
-            if (filter.containerFormID != 0 && filter.containerFormID != net->masterFormID) {
-                activeContainers.insert(filter.containerFormID);
-            }
-        }
-        if (net->catchAllFormID != 0 && net->catchAllFormID != net->masterFormID) {
-            activeContainers.insert(net->catchAllFormID);
-        }
+    // Private gather implementation — works with a pre-resolved container set.
+    // No ContainerRegistry calls; trusts that the set only contains available containers.
+    static uint32_t GatherToMasterImpl(
+        const std::string& a_networkName,
+        RE::TESObjectREFR* a_masterRef,
+        const std::set<RE::FormID>& a_containers) {
 
         struct GatherEntry {
             RE::TESBoundObject* item;
@@ -222,7 +264,7 @@ namespace Distributor {
         };
         std::vector<GatherEntry> toGather;
 
-        for (auto containerID : activeContainers) {
+        for (auto containerID : a_containers) {
             auto* containerRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(containerID);
             if (!containerRef) continue;
 
@@ -238,13 +280,49 @@ namespace Distributor {
             logger::debug("  Gathering {}x {} from {:08X} to master",
                          entry.count, entry.item->GetName(), entry.source->GetFormID());
             entry.source->RemoveItem(entry.item, entry.count, RE::ITEM_REMOVE_REASON::kStoreInContainer,
-                                     nullptr, masterRef);
+                                     nullptr, a_masterRef);
             totalItems += entry.count;
         }
 
         logger::info("GatherToMaster: gathered {} items from {} containers in network '{}'",
-                     totalItems, activeContainers.size(), a_networkName);
+                     totalItems, a_containers.size(), a_networkName);
         return totalItems;
+    }
+
+    // Collect unique non-master, non-zero container FormIDs from an effective pipeline
+    static std::set<RE::FormID> CollectActiveContainers(
+        const EffectivePipeline& a_pipeline,
+        RE::FormID a_masterFormID) {
+
+        std::set<RE::FormID> containers;
+        for (const auto& filter : a_pipeline.filters) {
+            if (filter.containerFormID != 0 && filter.containerFormID != a_masterFormID) {
+                containers.insert(filter.containerFormID);
+            }
+        }
+        if (a_pipeline.catchAllFormID != 0 && a_pipeline.catchAllFormID != a_masterFormID) {
+            containers.insert(a_pipeline.catchAllFormID);
+        }
+        return containers;
+    }
+
+    uint32_t GatherToMaster(const std::string& a_networkName) {
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* net = mgr->FindNetwork(a_networkName);
+        if (!net) {
+            logger::error("GatherToMaster: network '{}' not found", a_networkName);
+            return 0;
+        }
+
+        auto* masterRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(net->masterFormID);
+        if (!masterRef) {
+            logger::error("GatherToMaster: master container {:08X} not found", net->masterFormID);
+            return 0;
+        }
+
+        auto effective = ResolveEffectivePipeline(net->filters, net->catchAllFormID, net->masterFormID);
+        auto containers = CollectActiveContainers(effective, net->masterFormID);
+        return GatherToMasterImpl(a_networkName, masterRef, containers);
     }
 
     DistributeResult Distribute(const std::string& a_networkName) {
@@ -263,8 +341,12 @@ namespace Distributor {
             return result;
         }
 
-        // Phase 1: Gather all items from pipeline containers to master
-        GatherToMaster(a_networkName);
+        // Resolve availability once — used by both gather and pipeline
+        auto effective = ResolveEffectivePipeline(net->filters, net->catchAllFormID, net->masterFormID);
+
+        // Phase 1: Gather all items from effective containers to master
+        auto containers = CollectActiveContainers(effective, net->masterFormID);
+        GatherToMasterImpl(a_networkName, masterRef, containers);
 
         // Phase 2: Build pool from master inventory
         std::vector<PoolItem> pool;
@@ -274,8 +356,8 @@ namespace Distributor {
             pool.push_back({item, data.first});
         }
 
-        // Phase 3: Run pipeline
-        auto pipelineResult = RunPipeline(net->filters, net->catchAllFormID,
+        // Phase 3: Run pipeline (effective filters — unavailable containers already zeroed)
+        auto pipelineResult = RunPipeline(effective.filters, effective.catchAllFormID,
                                           net->masterFormID, pool, true);
 
         // Phase 4: Execute routes
@@ -318,15 +400,16 @@ namespace Distributor {
         result.contestedCounts.resize(a_filters.size(), 0);
         result.contestedByMaps.resize(a_filters.size());
 
-        // Derive the set of all containers from the inputs
+        // Resolve availability once
+        auto effective = ResolveEffectivePipeline(a_filters, a_catchAllFormID, a_masterFormID);
+
+        // Derive the set of all effective containers (master + available pipeline containers)
         std::set<RE::FormID> allContainers;
         if (a_masterFormID != 0) allContainers.insert(a_masterFormID);
-        for (const auto& f : a_filters) {
-            if (f.containerFormID != 0) allContainers.insert(f.containerFormID);
-        }
-        if (a_catchAllFormID != 0) allContainers.insert(a_catchAllFormID);
+        auto pipelineContainers = CollectActiveContainers(effective, a_masterFormID);
+        allContainers.insert(pipelineContainers.begin(), pipelineContainers.end());
 
-        // Build item pool from all containers (simulates GatherToMaster)
+        // Build item pool from all effective containers (simulates GatherToMaster)
         std::vector<PoolItem> pool;
         for (auto formID : allContainers) {
             auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(formID);
@@ -338,9 +421,10 @@ namespace Distributor {
             }
         }
 
-        // Run pipeline (counts only, no ref resolution)
-        auto pipelineResult = RunPipeline(a_filters, a_catchAllFormID, a_masterFormID,
-                                          pool, false);
+        // Run pipeline (counts only, no ref resolution) — effective pipeline has
+        // unavailable containers already zeroed to Pass
+        auto pipelineResult = RunPipeline(effective.filters, effective.catchAllFormID,
+                                          a_masterFormID, pool, false);
 
         // Map pipeline outcomes to prediction result
         for (size_t i = 0; i < pipelineResult.filterOutcomes.size(); ++i) {

@@ -1,5 +1,4 @@
 #include "OriginPanel.h"
-#include "ContainerScanner.h"
 #include "MenuLayout.h"
 #include "ScaleformUtil.h"
 
@@ -107,8 +106,22 @@ namespace OriginPanel {
             bgClip.Invoke("endFill", nullptr, nullptr, 0);
         }
 
-        // Populate with master container data
-        auto [masterName, masterLoc] = ContainerScanner::ResolveContainerInfo(a_masterFormID);
+        // Populate with master container data — direct REFR lookup, not source-managed
+        std::string masterName;
+        auto* masterRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_masterFormID);
+        if (masterRef) {
+            auto* cell = masterRef->GetParentCell();
+            std::string cellName;
+            if (cell && cell->GetFullName() && cell->GetFullName()[0] != '\0') {
+                cellName = cell->GetFullName();
+            }
+            std::string baseName;
+            if (masterRef->GetBaseObject() && masterRef->GetBaseObject()->GetName()) {
+                baseName = masterRef->GetBaseObject()->GetName();
+            }
+            masterName = cellName.empty() ? baseName : (cellName + ": " + baseName);
+        }
+        if (masterName.empty()) masterName = "Master";
 
         RE::GFxValue nameVal, contVal, cntVal;
         std::string originLabel = "Origin";
@@ -119,7 +132,6 @@ namespace OriginPanel {
 
         // Count total items in master container
         int masterItemCount = 0;
-        auto* masterRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_masterFormID);
         if (masterRef) {
             auto inv = masterRef->GetInventory();
             for (auto& [item, data] : inv) {

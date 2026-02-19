@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # ---- Versioning ----
 set(VERSION_MAJOR 1)
-set(VERSION_MINOR 0)
+set(VERSION_MINOR 1)
 set(VERSION_PATCH 0)
 
 # ---- Project ----
@@ -79,6 +79,14 @@ set(SOURCES
     src/ConfigState.cpp
     src/ActionBar.cpp
     src/ContainerScanner.cpp
+    src/ContainerRegistry.cpp
+    src/ContainerRegistryTest.cpp
+    src/SpecialContainerSource.cpp
+    src/NFFContainerSource.cpp
+    src/KWFContainerSource.cpp
+    src/TaggedContainerSource.cpp
+    src/SCIEContainerSource.cpp
+    src/CellScanContainerSource.cpp
     src/OriginPanel.cpp
     src/HoldRemove.cpp
     src/FilterPanel.cpp
@@ -99,6 +107,9 @@ set(HEADERS
     include/NetworkManager.h
     include/UIHelper.h
     include/Settings.h
+    include/IContainerSource.h
+    include/ContainerRegistry.h
+    include/ContainerRegistryTest.h
     src/Distributor.h
     src/ConsoleCommands.h
     src/ActivationHook.h

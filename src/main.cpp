@@ -16,6 +16,16 @@
 #include "TranslationService.h"
 #include "APIMessaging.h"
 #include "WelcomeMenu.h"
+#include "ContainerRegistry.h"
+#include "ContainerRegistryTest.h"
+
+// Container source registration functions (defined in source files)
+void RegisterSpecialContainerSource();
+void RegisterNFFContainerSource();
+void RegisterKWFContainerSource();
+void RegisterTaggedContainerSource();
+void RegisterSCIEContainerSource();
+void RegisterCellScanContainerSource();
 
 #include <ShlObj.h>  // SHGetKnownFolderPath — needed because SKSE::log::log_directory() is broken (see reference override)
 
@@ -199,6 +209,17 @@ namespace {
                 Settings::LoadUniqueItems();
                 TraitEvaluator::Init();
                 FilterRegistry::GetSingleton()->Init();
+                // Register container sources (order determines priority fallback)
+                RegisterSpecialContainerSource();
+                RegisterNFFContainerSource();
+                RegisterKWFContainerSource();
+                RegisterTaggedContainerSource();
+                RegisterSCIEContainerSource();
+                RegisterCellScanContainerSource();
+#ifdef _DEBUG
+                // Run integration tests in debug builds
+                ContainerRegistryTest::RunTests();
+#endif
                 VendorRegistry::GetSingleton()->LoadWhitelist();
                 if (auto* papyrus = SKSE::GetPapyrusInterface()) {
                     papyrus->Register(ConsoleCommands::RegisterFunctions);

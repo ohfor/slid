@@ -1,6 +1,7 @@
 #include "FilterPanel.h"
 #include "ConfigState.h"
 #include "ConfirmDialog.h"
+#include "ContainerRegistry.h"
 #include "ContainerScanner.h"
 #include "Distributor.h"
 #include "FilterRegistry.h"
@@ -425,6 +426,9 @@ namespace FilterPanel {
         s_movie = a_movie;
         s_callbacks = a_callbacks;
         ClearPredictions();
+    }
+
+    void LoadFromNetwork() {
         s_callbacks.buildStagesFromNetwork();
     }
 
@@ -462,9 +466,7 @@ namespace FilterPanel {
 
         // Defer prediction recalc to first Update() tick -- safer than running
         // GetInventory on all containers during PostCreate
-        if (!s_filterRows.empty()) {
-            s_deferredRecalc = true;
-        }
+        s_deferredRecalc = true;
     }
 
     bool Update() {
@@ -574,16 +576,7 @@ namespace FilterPanel {
     }
     int GetPredictedOriginCount() { return s_predictedOriginCount; }
     int GetCurrentOriginCount() {
-        int count = 0;
-        auto* masterRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(ConfigState::GetMasterFormID());
-        if (masterRef) {
-            auto inv = masterRef->GetInventory();
-            for (auto& [item, data] : inv) {
-                if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                count += data.first;
-            }
-        }
-        return count;
+        return ContainerRegistry::GetSingleton()->CountItems(ConfigState::GetMasterFormID());
     }
 
     bool SelectedRowNeedsHold() {
@@ -912,16 +905,8 @@ namespace FilterPanel {
                     s_filterRows.emplace_back(FilterRow(std::move(rootData)));
                 }
 
-                // Add as child
-                FilterRow::ChildData cd;
-                cd.filterID = d.filterID;
-                cd.name = d.name;
-                cd.containerName = d.containerName;
-                cd.location = d.location;
-                cd.containerFormID = d.containerFormID;
-                cd.count = d.count;
-                cd.predictedCount = d.predictedCount;
-                s_filterRows[rootIdx].MutableChildren().push_back(std::move(cd));
+                // Add as child — Data is the same type for root and children
+                s_filterRows[rootIdx].MutableChildren().push_back(std::move(d));
             } else {
                 // This is a root filter
                 auto it = rootIndexMap.find(d.filterID);
@@ -956,7 +941,7 @@ namespace FilterPanel {
                 if (existingChildIDs.count(childID)) continue;
                 const IFilter* childFilter = registry->GetFilter(childID);
                 if (!childFilter) continue;
-                FilterRow::ChildData cd;
+                FilterRow::Data cd;
                 cd.filterID = childID;
                 cd.name = std::string(childFilter->GetDisplayName());
                 cd.containerName = "unlinked";
@@ -1519,33 +1504,12 @@ namespace FilterPanel {
     static int CountFamilyItems(int a_familyIndex) {
         if (a_familyIndex < 0 || a_familyIndex >= static_cast<int>(s_filterRows.size())) return 0;
         auto& row = s_filterRows[a_familyIndex];
+        auto* registry = ContainerRegistry::GetSingleton();
         int total = 0;
 
-        // Count items in root container
-        RE::FormID rootContainer = row.GetData().containerFormID;
-        if (rootContainer != 0) {
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(rootContainer);
-            if (ref) {
-                auto inv = ref->GetInventory();
-                for (auto& [item, data] : inv) {
-                    if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                    total += data.first;
-                }
-            }
-        }
-
-        // Count items in children containers
+        total += registry->CountItems(row.GetData().containerFormID);
         for (const auto& child : row.GetChildren()) {
-            if (child.containerFormID != 0) {
-                auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(child.containerFormID);
-                if (ref) {
-                    auto inv = ref->GetInventory();
-                    for (auto& [item, data] : inv) {
-                        if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                        total += data.first;
-                    }
-                }
-            }
+            total += registry->CountItems(child.containerFormID);
         }
         return total;
     }

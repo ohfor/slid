@@ -4,7 +4,7 @@
 #include "CatchAllPanel.h"
 #include "ConfigState.h"
 #include "ConfirmDialog.h"
-#include "ContainerScanner.h"
+#include "ContainerRegistry.h"
 #include "Distributor.h"
 #include "Dropdown.h"
 #include "Feedback.h"
@@ -32,16 +32,11 @@ namespace SLIDMenu {
         auto masterFormID = ConfigState::GetMasterFormID();
         int total = 0;
 
+        auto* registry = ContainerRegistry::GetSingleton();
         for (const auto& row : filterRows) {
             auto countContainer = [&](RE::FormID formID) {
                 if (formID == 0 || formID == masterFormID) return;
-                auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(formID);
-                if (!ref) return;
-                auto inv = ref->GetInventory();
-                for (auto& [item, data] : inv) {
-                    if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                    total += data.first;
-                }
+                total += registry->CountItems(formID);
             };
             countContainer(row.GetData().containerFormID);
             for (const auto& child : row.GetChildren()) {
@@ -52,14 +47,7 @@ namespace SLIDMenu {
         // Count catch-all items (only if catch-all is not the master)
         auto catchAllFormID = CatchAllPanel::GetContainerFormID();
         if (catchAllFormID != 0 && catchAllFormID != masterFormID) {
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(catchAllFormID);
-            if (ref) {
-                auto inv = ref->GetInventory();
-                for (auto& [item, data] : inv) {
-                    if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                    total += data.first;
-                }
-            }
+            total += registry->CountItems(catchAllFormID);
         }
         return total;
     }
@@ -153,6 +141,9 @@ namespace SLIDMenu {
             [this]() { FilterPanel::SaveOrchestratorFocus(static_cast<int>(m_focus), m_actionIndex); FilterPanel::SaveState(); }
         };
         CatchAllPanel::Init(uiMovie.get(), ConfigState::GetMasterFormID(), catchAllCb);
+
+        // Load network data into panels (after both Init calls, before Draw)
+        FilterPanel::LoadFromNetwork();
 
         // Draw panel chrome (background, borders, column headers, bands)
         DrawUI();
@@ -375,15 +366,7 @@ namespace SLIDMenu {
         // due to item transfers like GatherFamilyToMaster)
         RE::FormID countFormID = catchAllIsMaster ? masterFormID : catchAllFormID;
         if (countFormID != 0) {
-            int liveCount = 0;
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(countFormID);
-            if (ref) {
-                auto inv = ref->GetInventory();
-                for (auto& [item, data] : inv) {
-                    if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                    liveCount += data.first;
-                }
-            }
+            int liveCount = ContainerRegistry::GetSingleton()->CountItems(countFormID);
             CatchAllPanel::SetCount(liveCount, false);
         }
 
@@ -404,18 +387,8 @@ namespace SLIDMenu {
 
         std::vector<int> oldFilterCounts;
         for (const auto& row : filterRows) oldFilterCounts.push_back(row.GetData().count);
-        int oldCatchAllCount = 0;
-        {
-            auto catchAllFormID = CatchAllPanel::GetContainerFormID();
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(catchAllFormID);
-            if (ref) {
-                auto inv = ref->GetInventory();
-                for (auto& [item, data] : inv) {
-                    if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                    oldCatchAllCount += data.first;
-                }
-            }
-        }
+        int oldCatchAllCount = ContainerRegistry::GetSingleton()->CountItems(
+            CatchAllPanel::GetContainerFormID());
 
         int oldOriginCount = FilterPanel::GetCurrentOriginCount();
 
@@ -433,19 +406,9 @@ namespace SLIDMenu {
             if (newRows[i].GetData().count != oldCount) flashIndices.insert(i);
         }
         // Check catch-all
-        auto newCatchAllFormID = CatchAllPanel::GetContainerFormID();
-        int newCatchAllCount = 0;
-        {
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(newCatchAllFormID);
-            if (ref) {
-                auto inv = ref->GetInventory();
-                for (auto& [item, data] : inv) {
-                    if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                    newCatchAllCount += data.first;
-                }
-            }
-            if (newCatchAllCount != oldCatchAllCount) flashIndices.insert(filterCount);
-        }
+        int newCatchAllCount = ContainerRegistry::GetSingleton()->CountItems(
+            CatchAllPanel::GetContainerFormID());
+        if (newCatchAllCount != oldCatchAllCount) flashIndices.insert(filterCount);
 
         int newOriginCount = FilterPanel::GetCurrentOriginCount();
         if (newOriginCount != oldOriginCount) flashIndices.insert(-1);
@@ -475,18 +438,8 @@ namespace SLIDMenu {
         auto& filterRows = FilterPanel::GetFilterRows();
         std::vector<int> oldFilterCounts;
         for (const auto& row : filterRows) oldFilterCounts.push_back(row.GetData().count);
-        int oldCatchAllCount = 0;
-        {
-            auto catchAllFormID = CatchAllPanel::GetContainerFormID();
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(catchAllFormID);
-            if (ref) {
-                auto inv = ref->GetInventory();
-                for (auto& [item, data] : inv) {
-                    if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                    oldCatchAllCount += data.first;
-                }
-            }
-        }
+        int oldCatchAllCount = ContainerRegistry::GetSingleton()->CountItems(
+            CatchAllPanel::GetContainerFormID());
         int oldOriginCount = FilterPanel::GetCurrentOriginCount();
 
         auto moved = Distributor::GatherToMaster(networkName);
@@ -503,19 +456,9 @@ namespace SLIDMenu {
             int oldCount = (i < static_cast<int>(oldFilterCounts.size())) ? oldFilterCounts[i] : 0;
             if (newRows[i].GetData().count != oldCount) flashIndices.insert(i);
         }
-        auto newCatchAllFormID = CatchAllPanel::GetContainerFormID();
-        int newCatchAllCount = 0;
-        {
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(newCatchAllFormID);
-            if (ref) {
-                auto inv = ref->GetInventory();
-                for (auto& [item, data] : inv) {
-                    if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-                    newCatchAllCount += data.first;
-                }
-            }
-            if (newCatchAllCount != oldCatchAllCount) flashIndices.insert(filterCount);
-        }
+        int newCatchAllCount = ContainerRegistry::GetSingleton()->CountItems(
+            CatchAllPanel::GetContainerFormID());
+        if (newCatchAllCount != oldCatchAllCount) flashIndices.insert(filterCount);
 
         int newOriginCount = FilterPanel::GetCurrentOriginCount();
         if (newOriginCount != oldOriginCount) flashIndices.insert(-1);
@@ -1024,8 +967,8 @@ namespace SLIDMenu {
                             ResetRepeat();
                             auto doReset = []() {
                                 auto masterFormID = ConfigState::GetMasterFormID();
-                                auto [cName, cLoc] = ContainerScanner::ResolveContainerInfo(masterFormID);
-                                CatchAllPanel::SetCatchAll(cName.empty() ? "Master" : cName, masterFormID, cLoc, 0);
+                                auto display = ContainerRegistry::GetSingleton()->Resolve(masterFormID);
+                                CatchAllPanel::SetCatchAll(display.name.empty() ? "Master" : display.name, masterFormID, display.location, 0);
                                 FilterPanel::BuildDefaultsAndCommit();
                                 if (g_activeMenu) {
                                     g_activeMenu->m_focus = FocusTarget::kActionBar;

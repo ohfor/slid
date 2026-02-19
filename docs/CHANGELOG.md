@@ -7,6 +7,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-02-19
+
+### Added
+
+- **Nether's Follower Framework integration** — NFF follower storage containers appear in the container picker and can be assigned to filters. Auto-detected when NFF is installed
+- **Khajiit Will Follow integration** — Storage containers for all 4 KWF followers (Bikhai, Ma'kara, Nanak, S'ariq) available in the picker. Auto-detected when KWF is installed
+- Container picker now groups entries: special routing, follower storage, tagged, SCIE, nearby containers
+
+### Fixed
+
+- **All Scaleform menus broken in v1.0.0** — SLIDConfig.swf was missing from the release package, breaking the config menu, tag input, whoosh config, sell overview, and welcome tutorial
+- Sort and Sweep no longer touch unavailable containers (e.g., SCIE containers when SCIE integration is disabled)
+- Predictions no longer show phantom item counts from unavailable containers
+
 ## [1.0.0] - 2026-02-17
 
 ### Added

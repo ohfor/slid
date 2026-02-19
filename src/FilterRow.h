@@ -35,19 +35,6 @@ public:
         uint32_t contestColor = 0;  // 0 = default COLOR_CONTEST, else override
     };
 
-    struct ChildData {
-        std::string filterID;
-        std::string name;
-        std::string containerName;
-        std::string location;
-        RE::FormID containerFormID = 0;
-        int count = 0;
-        int predictedCount = -1;
-        int contestedCount = 0;     // animated display value (set by FilterPanel)
-        int contestAlpha = 0;       // 0-100 text alpha (for fade animation)
-        uint32_t contestColor = 0;  // 0 = default COLOR_CONTEST, else override
-    };
-
     FilterRow() = default;
     explicit FilterRow(Data a_data);
 
@@ -80,9 +67,9 @@ public:
     bool HasChildren() const;
     bool IsExpanded() const;
     void SetExpanded(bool a_expanded);
-    const std::vector<ChildData>& GetChildren() const;
-    std::vector<ChildData>& MutableChildren();
-    void SetChildren(std::vector<ChildData> a_children);
+    const std::vector<Data>& GetChildren() const;
+    std::vector<Data>& MutableChildren();
+    void SetChildren(std::vector<Data> a_children);
 
     // Number of display rows this family occupies (1 if collapsed, 1+children if expanded)
     int GetDisplayRowCount() const;
@@ -131,7 +118,7 @@ private:
     void ClearExpandIndicator(RE::GFxValue& a_clip) const;
 
     Data m_data;
-    std::vector<ChildData> m_children;
+    std::vector<Data> m_children;
     bool m_expanded = false;
     mutable Dropdown m_dropdown;  // shared instance for filter/container popups (only one open at a time)
 };

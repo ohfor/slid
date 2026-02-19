@@ -1,6 +1,6 @@
 #include "FilterRow.h"
 #include "ConfigState.h"
-#include "ContainerScanner.h"
+#include "ContainerRegistry.h"
 #include "FilterRegistry.h"
 #include "NetworkManager.h"
 #include "ScaleformUtil.h"
@@ -29,9 +29,9 @@ FilterRow::FilterRow(Data a_data) : m_data(std::move(a_data)) {}
 bool FilterRow::HasChildren() const { return !m_children.empty(); }
 bool FilterRow::IsExpanded() const { return m_expanded; }
 void FilterRow::SetExpanded(bool a_expanded) { m_expanded = a_expanded; }
-const std::vector<FilterRow::ChildData>& FilterRow::GetChildren() const { return m_children; }
-std::vector<FilterRow::ChildData>& FilterRow::MutableChildren() { return m_children; }
-void FilterRow::SetChildren(std::vector<ChildData> a_children) { m_children = std::move(a_children); }
+const std::vector<FilterRow::Data>& FilterRow::GetChildren() const { return m_children; }
+std::vector<FilterRow::Data>& FilterRow::MutableChildren() { return m_children; }
+void FilterRow::SetChildren(std::vector<Data> a_children) { m_children = std::move(a_children); }
 
 int FilterRow::GetDisplayRowCount() const {
     if (!m_expanded || m_children.empty()) return 1;
@@ -77,22 +77,12 @@ std::vector<FilterStage> FilterRow::ToFilterStages() const {
 // --- Dropdown ---
 
 namespace {
-    // Count total playable items in a container
     int CountContainerItems(RE::FormID a_containerFormID) {
-        if (a_containerFormID == 0) return 0;
-        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_containerFormID);
-        if (!ref) return 0;
-        int count = 0;
-        auto inv = ref->GetInventory();
-        for (auto& [item, data] : inv) {
-            if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
-            count += data.first;
-        }
-        return count;
+        return ContainerRegistry::GetSingleton()->CountItems(a_containerFormID);
     }
 
     std::vector<Dropdown::Entry> BuildContainerEntries() {
-        auto pickerEntries = ContainerScanner::BuildContainerList(ConfigState::GetMasterFormID(), false);
+        auto pickerEntries = ContainerRegistry::GetSingleton()->BuildPickerList(ConfigState::GetMasterFormID());
         std::vector<Dropdown::Entry> entries;
         for (const auto& pe : pickerEntries) {
             Dropdown::Entry e;
@@ -165,6 +155,11 @@ void FilterRow::OpenContainerDropdown(const DropdownContext& a_ctx, int a_childI
             auto sellFID = NetworkManager::GetSingleton()->GetSellContainerFormID();
             if (currentContainer == sellFID && sellFID != 0)
                 syncColor = MenuLayout::COLOR_SELL;
+            else {
+                auto display = ContainerRegistry::GetSingleton()->Resolve(currentContainer);
+                if (display.color != 0)
+                    syncColor = display.color;
+            }
         }
         m_dropdown.SetValue(std::to_string(currentContainer), syncLabel, syncLoc, syncColor);
     }
@@ -211,9 +206,9 @@ void FilterRow::OpenContainerDropdown(const DropdownContext& a_ctx, int a_childI
                 containerName = T("$SLID_Pass");
                 containerLoc = "";
             } else {
-                auto [cn, cl] = ContainerScanner::ResolveContainerInfo(newFormID);
-                containerName = cn;
-                containerLoc = cl;
+                auto display = ContainerRegistry::GetSingleton()->Resolve(newFormID);
+                containerName = display.name;
+                containerLoc = display.location;
             }
 
             // Keep/Pass have no separate destination — don't count master items
@@ -321,7 +316,7 @@ void FilterRow::BeginSetup(const DropdownContext& a_ctx,
             for (const auto& childID : registryChildren) {
                 const IFilter* childFilter = reg->GetFilter(childID);
                 if (!childFilter) continue;
-                ChildData cd;
+                Data cd;
                 cd.filterID = childID;
                 cd.name = std::string(childFilter->GetDisplayName());
                 cd.containerName = T("$SLID_Unlinked");
@@ -393,10 +388,28 @@ void FilterRow::RenderRoot(RE::GFxMovieView* a_movie, RE::GFxValue& a_clip,
     double nameIndent = EXPAND_X + EXPAND_SIZE + 4.0;
     int displayNum = HasChildren() ? -1 : a_displayNum;
 
+    // Resolve container state once — used for count display, prediction, and color
+    RE::FormID masterFID = ConfigState::GetMasterFormID();
+    bool isKeep = (m_data.containerFormID == masterFID && m_data.containerFormID != 0);
+    bool isPass = (m_data.containerFormID == 0);
+    bool containerAvailable = isKeep || isPass;  // Keep/Pass are always "available"
+    uint32_t sourceColor = 0;
+    if (!isKeep && !isPass) {
+        auto sellFID = NetworkManager::GetSingleton()->GetSellContainerFormID();
+        if (m_data.containerFormID == sellFID && sellFID != 0) {
+            sourceColor = COLOR_SELL;
+            containerAvailable = true;  // sell container is always available
+        } else {
+            auto display = ContainerRegistry::GetSingleton()->Resolve(m_data.containerFormID);
+            sourceColor = display.color;
+            containerAvailable = display.available;
+        }
+    }
+
     // Collapsed families show aggregate count across all family members
     bool aggregate = HasChildren() && !m_expanded;
-    int count = m_data.count;
-    int predicted = m_data.predictedCount;
+    int count = containerAvailable ? m_data.count : 0;
+    int predicted = containerAvailable ? m_data.predictedCount : -1;
     int contested = m_data.contestedCount;
     int contAlpha = m_data.contestAlpha;
     uint32_t contColor = m_data.contestColor;
@@ -405,16 +418,24 @@ void FilterRow::RenderRoot(RE::GFxMovieView* a_movie, RE::GFxValue& a_clip,
         // must not double-count the items in that container.
         std::set<RE::FormID> seenContainers;
         count = 0;
-        if (m_data.containerFormID != 0 && seenContainers.insert(m_data.containerFormID).second) {
+        if (m_data.containerFormID != 0 && containerAvailable && seenContainers.insert(m_data.containerFormID).second) {
             count += m_data.count;
         }
-        predicted = (m_data.predictedCount >= 0) ? m_data.predictedCount : 0;
+        predicted = (containerAvailable && m_data.predictedCount >= 0) ? m_data.predictedCount : 0;
         contested = m_data.contestedCount;
         contAlpha = m_data.contestAlpha;
-        bool hasPrediction = (m_data.predictedCount >= 0);
+        bool hasPrediction = (containerAvailable && m_data.predictedCount >= 0);
         for (const auto& child : m_children) {
             if (child.containerFormID != 0 && seenContainers.insert(child.containerFormID).second) {
-                count += child.count;
+                // Check child container availability for aggregate
+                bool childAvail = false;
+                if (child.containerFormID == masterFID) {
+                    childAvail = true;
+                } else if (child.containerFormID != 0) {
+                    auto cd = ContainerRegistry::GetSingleton()->Resolve(child.containerFormID);
+                    childAvail = cd.available;
+                }
+                if (childAvail) count += child.count;
             }
             if (child.predictedCount >= 0) {
                 predicted += child.predictedCount;
@@ -429,14 +450,9 @@ void FilterRow::RenderRoot(RE::GFxMovieView* a_movie, RE::GFxValue& a_clip,
 
     // Keep/Pass have no separate container — flatten prediction into count (no arrow)
     // -1 count signals "nothing to show" when no prediction is active
-    {
-        RE::FormID masterFID = ConfigState::GetMasterFormID();
-        bool isKeep = (m_data.containerFormID == masterFID && m_data.containerFormID != 0);
-        bool isPass = (m_data.containerFormID == 0);
-        if (isKeep || isPass) {
-            count = (predicted >= 0) ? predicted : -1;
-            predicted = -1;
-        }
+    if (isKeep || isPass) {
+        count = (predicted >= 0) ? predicted : -1;
+        predicted = -1;
     }
 
     DrawText(a_movie, a_clipPath, m_data.name,
@@ -445,20 +461,18 @@ void FilterRow::RenderRoot(RE::GFxMovieView* a_movie, RE::GFxValue& a_clip,
 
     // Container column — dropdown closed state (sync value from data each frame)
     {
-        RE::FormID masterFID = ConfigState::GetMasterFormID();
         uint32_t closedColor = 0;
         std::string closedLabel;
-        if (m_data.containerFormID == masterFID && m_data.containerFormID != 0) {
+        if (isKeep) {
             closedColor = COLOR_KEEP;
             closedLabel = T("$SLID_Keep");
-        } else if (m_data.containerFormID == 0) {
+        } else if (isPass) {
             closedColor = COLOR_PASS;
             closedLabel = T("$SLID_Pass");
         } else {
             closedLabel = m_data.containerName;
-            auto sellFID = NetworkManager::GetSingleton()->GetSellContainerFormID();
-            if (m_data.containerFormID == sellFID && sellFID != 0)
-                closedColor = COLOR_SELL;
+            if (sourceColor != 0)
+                closedColor = sourceColor;
         }
         m_dropdown.SetValue(
             std::to_string(m_data.containerFormID),
@@ -472,11 +486,7 @@ void FilterRow::RenderRoot(RE::GFxMovieView* a_movie, RE::GFxValue& a_clip,
                             a_dropdownFocused);
 
     // Chest icon — no icon for Keep (master) or Pass (unlinked)
-    {
-        RE::FormID masterFID = ConfigState::GetMasterFormID();
-        bool hasChest = (m_data.containerFormID != 0 && m_data.containerFormID != masterFID);
-        DrawChestIcon(a_clip, hasChest, a_chestHover);
-    }
+    DrawChestIcon(a_clip, !isKeep && !isPass, a_chestHover);
 
     // Expand/collapse indicator
     if (HasChildren()) {
@@ -516,19 +526,30 @@ void FilterRow::RenderChild(RE::GFxMovieView* a_movie, RE::GFxValue& a_clip,
     }
     DrawBackground(a_clip, bgColor, bgAlpha);
 
-    // Text — indented, dimmer, smaller
-    // Keep/Pass have no separate container — flatten prediction into count (no arrow)
-    // -1 count signals "nothing to show" when no prediction is active
-    int childCount = child.count;
-    int childPredicted = child.predictedCount;
-    {
-        RE::FormID masterFID = ConfigState::GetMasterFormID();
-        bool isKeep = (child.containerFormID == masterFID && child.containerFormID != 0);
-        bool isPass = (child.containerFormID == 0);
-        if (isKeep || isPass) {
-            childCount = (childPredicted >= 0) ? childPredicted : -1;
-            childPredicted = -1;
+    // Resolve container state once — used for count display, prediction, and color
+    RE::FormID masterFID = ConfigState::GetMasterFormID();
+    bool isKeep = (child.containerFormID == masterFID && child.containerFormID != 0);
+    bool isPass = (child.containerFormID == 0);
+    bool childAvailable = isKeep || isPass;
+    uint32_t sourceColor = 0;
+    if (!isKeep && !isPass) {
+        auto sellFID = NetworkManager::GetSingleton()->GetSellContainerFormID();
+        if (child.containerFormID == sellFID && sellFID != 0) {
+            sourceColor = MenuLayout::COLOR_SELL;
+            childAvailable = true;
+        } else {
+            auto display = ContainerRegistry::GetSingleton()->Resolve(child.containerFormID);
+            sourceColor = display.color;
+            childAvailable = display.available;
         }
+    }
+
+    // Text — indented, dimmer, smaller
+    int childCount = childAvailable ? child.count : 0;
+    int childPredicted = childAvailable ? child.predictedCount : -1;
+    if (isKeep || isPass) {
+        childCount = (childPredicted >= 0) ? childPredicted : -1;
+        childPredicted = -1;
     }
     DrawText(a_movie, a_clipPath, child.name,
              childCount, childPredicted,
@@ -536,25 +557,19 @@ void FilterRow::RenderChild(RE::GFxMovieView* a_movie, RE::GFxValue& a_clip,
              -1, CHILD_NAME_INDENT, CHILD_FONT_SIZE, COLOR_CHILD_FILTER);
 
     // Container column — dropdown closed state
-    // Children share the parent's m_dropdown for popups, but need their own
-    // value display. We use a temporary approach: set the dropdown value to
-    // the child's data, render, then the next render cycle sets it again.
-    // This works because RenderClosed only writes to the text field and clip.
     {
-        RE::FormID masterFID = ConfigState::GetMasterFormID();
         uint32_t closedColor = 0;
         std::string closedLabel;
-        if (child.containerFormID == masterFID && child.containerFormID != 0) {
+        if (isKeep) {
             closedColor = MenuLayout::COLOR_KEEP;
             closedLabel = T("$SLID_Keep");
-        } else if (child.containerFormID == 0) {
+        } else if (isPass) {
             closedColor = MenuLayout::COLOR_PASS;
             closedLabel = T("$SLID_Pass");
         } else {
             closedLabel = child.containerName;
-            auto sellFID = NetworkManager::GetSingleton()->GetSellContainerFormID();
-            if (child.containerFormID == sellFID && sellFID != 0)
-                closedColor = MenuLayout::COLOR_SELL;
+            if (sourceColor != 0)
+                closedColor = sourceColor;
         }
         Dropdown childDD;
         childDD.SetValue(
@@ -569,11 +584,7 @@ void FilterRow::RenderChild(RE::GFxMovieView* a_movie, RE::GFxValue& a_clip,
     }
 
     // Chest icon — no icon for Keep (master) or Pass (unlinked)
-    {
-        RE::FormID masterFID = ConfigState::GetMasterFormID();
-        bool hasChest = (child.containerFormID != 0 && child.containerFormID != masterFID);
-        DrawChestIcon(a_clip, hasChest, a_chestHover);
-    }
+    DrawChestIcon(a_clip, !isKeep && !isPass, a_chestHover);
 
     // No expand indicator for children
     ClearExpandIndicator(a_clip);
