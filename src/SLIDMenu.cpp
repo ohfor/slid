@@ -706,6 +706,9 @@ namespace SLIDMenu {
             return;
         }
         if (key == MOUSE_LEFT_BUTTON) {
+            // When a hold is active, let LMB events pass through to the hold tracking loops
+            if (ActionBar::IsDefaultsHolding() || ActionBar::IsWhooshHolding()) return;
+
             if (button->IsDown()) {
                 auto [mx, my] = FilterPanel::GetMousePos();
 
@@ -716,9 +719,6 @@ namespace SLIDMenu {
                     else ConfirmDialog::Cancel();
                     return;
                 }
-
-                // Cancel active holds on any click outside them
-                if (ActionBar::IsDefaultsHolding()) { ActionBar::CancelDefaultsHold(); return; }
 
                 // ActionBar hit test (before panel dispatch)
                 {
@@ -960,7 +960,8 @@ namespace SLIDMenu {
                 auto* button = event->AsButtonEvent();
                 if (!button) continue;
                 auto p = ParseButton(button->GetIDCode(), event->GetDevice());
-                if (p.confirm) {
+                bool isMouseLMB = (event->GetDevice() == RE::INPUT_DEVICE::kMouse && button->GetIDCode() == 0);
+                if (p.confirm || isMouseLMB) {
                     if (button->IsPressed()) {
                         ActionBar::UpdateDefaultsHold();
                         if (!ActionBar::IsDefaultsHolding()) {
@@ -1031,7 +1032,8 @@ namespace SLIDMenu {
                 auto* button = event->AsButtonEvent();
                 if (!button) continue;
                 auto p = ParseButton(button->GetIDCode(), event->GetDevice());
-                if (p.confirm) {
+                bool isMouseLMB = (event->GetDevice() == RE::INPUT_DEVICE::kMouse && button->GetIDCode() == 0);
+                if (p.confirm || isMouseLMB) {
                     if (button->IsPressed()) {
                         ActionBar::UpdateWhooshHold();
                         if (!ActionBar::IsWhooshHolding()) {

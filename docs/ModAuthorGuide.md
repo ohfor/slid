@@ -4,7 +4,7 @@ This guide explains how mod authors can integrate their mods with SLID (Skyrim L
 
 ## Overview
 
-SLID automatically discovers INI files matching `*SLID*.ini` in the SKSE plugins folder. By shipping a simple INI file with your mod, you can:
+SLID automatically discovers INI files matching `*SLID*.ini` in the `Data/SKSE/Plugins/SLID/` folder. By shipping a simple INI file with your mod, you can:
 
 - Add custom filters that appear in SLID's config menu
 - Filter items by keyword, FormList membership, or other traits
@@ -16,7 +16,7 @@ No DLL required. No API calls. Just data.
 
 ## Quick Start
 
-Create a file named `YourModName_SLID.ini` in `Data/SKSE/Plugins/`:
+Create a file named `YourModName_SLID.ini` in `Data/SKSE/Plugins/SLID/`:
 
 ```ini
 ; YourModName_SLID.ini
@@ -235,20 +235,73 @@ ExcludeTrait = weapon_type:staff
 
 ---
 
-## Pre-configured Networks and Containers
+## Pre-configured Links (Presets)
 
-Beyond filters, you can also ship pre-configured networks and tagged containers:
+The most powerful integration: ship a complete Link preset that users activate with one click. A preset declares a master container, filter assignments, container tags, and whoosh configuration — everything needed for a fully working Link.
 
-### Networks
+### Generating a Preset from an Existing Link
+
+The easiest way to create a preset is to configure a Link in-game, then export it:
+
+1. Set up the Link manually — assign filters, tag containers, configure Whoosh
+2. Open MCM → Mod Author page
+3. Select your Link from the dropdown
+4. Click "Generate Preset INI"
+5. Find `SLID_GEN_{name}.ini` in `Data/SKSE/Plugins/SLID/`
+6. Rename it to `YourMod_SLID.ini` and add a `RequirePlugin` line
+
+The generated file contains all four preset sections with inline comments for readability.
+
+### Preset INI Structure
+
+```ini
+[Preset:My Player Home]
+RequirePlugin = MyMod.esp
+Master = MyMod.esp|0x001234  ; Main Storage Chest
+
+[Preset:My Player Home:Filters]
+unique_items = Keep
+enchanted_items = Keep
+weapons = MyMod.esp|0x001235  ; Weapons Rack
+armor = MyMod.esp|0x001236    ; Armor Chest
+valuables = MyMod.esp|0x001237  ; Safe
+CatchAll = Keep
+
+[Preset:My Player Home:Tags]
+MyMod.esp|0x001234 = Main Storage Chest
+MyMod.esp|0x001235 = Weapons Rack
+MyMod.esp|0x001236 = Armor Chest
+MyMod.esp|0x001237 = Safe
+
+[Preset:My Player Home:Whoosh]
+weapons = true
+armor = true
+consumables = true
+crafting_materials = true
+```
+
+- **RequirePlugin**: Preset is silently skipped if plugin isn't loaded
+- **Filter values**: `Keep` (stays in master), `Pass` (filter skipped), or `Plugin.esp|0xLocalID`
+- **Tags**: Display names for the container picker
+- **Whoosh**: Family root IDs only (not children)
+- **Filter order** in the INI determines pipeline priority (top = highest)
+
+Users see the preset as "Available" on the MCM Link page and can activate it with one click.
+
+### Simple Networks and Containers
+
+For lighter integration, you can ship just a network or container tags:
+
+#### Networks
 
 ```ini
 [Network:MyMod Player Home]
 Master = MyMod.esp|0x001234
 ```
 
-Creates a network with the specified container as master. Users can then configure filters.
+Creates a network with the specified container as master. Users configure filters themselves.
 
-### Tagged Containers
+#### Tagged Containers
 
 ```ini
 [TaggedContainers]
@@ -258,6 +311,65 @@ MyMod.esp|0x001236|Alchemy Supplies = true
 ```
 
 Gives containers friendly display names in SLID's picker.
+
+---
+
+## Container Lists
+
+Container lists make named containers from your mod available in SLID's picker for **any** Link. Unlike presets, they don't create a network — they just make containers accessible. Users decide which filters to assign.
+
+This is ideal for mods with organized storage in a different cell from the player's master (e.g., LOTD Safehouse containers that cell scan can't discover).
+
+### Container List INI Structure
+
+```ini
+[ContainerList:LOTD Safehouse]
+RequirePlugin = LegacyoftheDragonborn.esm
+Description = Safehouse and Quality Armory containers from Legacy of the Dragonborn.
+
+[ContainerList:LOTD Safehouse:Containers]
+LegacyoftheDragonborn.esm|0x614C0E = Ingots and Ore
+LegacyoftheDragonborn.esm|0x614C07 = Leathercraft
+LegacyoftheDragonborn.esm|0x0AECD9 = Soul Gems
+```
+
+### Root Section
+
+| Field | Description |
+|-------|-------------|
+| `RequirePlugin` | Plugin filename. Container list is silently skipped if not loaded. Multiple allowed. |
+| `Description` | Shown in MCM info text when the user highlights the container list. |
+
+### Containers Section
+
+Each line is `key = value` where:
+- **key** is a container reference (`Plugin.esp|0xLocalFormID`) — must be a persistent REFR, not a base CONT
+- **value** is the display name override (shown in the picker instead of the base object name)
+
+If the display name is empty, SLID falls back to the container's base object name.
+
+### Behavior
+
+- Containers appear in the picker alongside tagged, scanned, and follower containers, grouped under a section header matching the container list name
+- Plugin-gated: containers only appear when `RequirePlugin` is installed
+- Non-destructive: removing the INI removes containers from the picker. Any filter assignments that used those containers show as unavailable (greyed out)
+- No cosave involvement: container lists are derived from INI at load time
+
+### Example: Player Home Storage
+
+```ini
+; MyHome_SLID.ini
+[ContainerList:My Awesome Home]
+RequirePlugin = MyHome.esp
+Description = Storage containers in My Awesome Home.
+
+[ContainerList:My Awesome Home:Containers]
+MyHome.esp|0x001234 = Weapon Rack
+MyHome.esp|0x001235 = Armor Chest
+MyHome.esp|0x001236 = Alchemy Supplies
+MyHome.esp|0x001237 = Gem Safe
+MyHome.esp|0x001238 = Pantry
+```
 
 ---
 

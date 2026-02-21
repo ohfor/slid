@@ -25,6 +25,7 @@ void RegisterNFFContainerSource();
 void RegisterKWFContainerSource();
 void RegisterTaggedContainerSource();
 void RegisterSCIEContainerSource();
+void RegisterContainerListSource();
 void RegisterCellScanContainerSource();
 
 #include <ShlObj.h>  // SHGetKnownFolderPath — needed because SKSE::log::log_directory() is broken (see reference override)
@@ -215,6 +216,7 @@ namespace {
                 RegisterKWFContainerSource();
                 RegisterTaggedContainerSource();
                 RegisterSCIEContainerSource();
+                RegisterContainerListSource();
                 RegisterCellScanContainerSource();
 #ifdef _DEBUG
                 // Run integration tests in debug builds

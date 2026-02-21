@@ -97,12 +97,37 @@ std::vector<PickerEntry> ContainerRegistry::BuildPickerList(RE::FormID a_masterF
         }
     }
 
-    // Sort by group, then alphabetically within group
+    // Sort by group, then subGroup, then alphabetically within subGroup
     std::sort(result.begin(), result.end(),
         [](const PickerEntry& a, const PickerEntry& b) {
             if (a.group != b.group) return a.group < b.group;
+            if (a.subGroup != b.subGroup) return a.subGroup < b.subGroup;
             return a.name < b.name;
         });
+
+    // Inject non-selectable header entries before each new non-empty subGroup
+    {
+        std::vector<PickerEntry> withHeaders;
+        withHeaders.reserve(result.size() + 8);
+        std::string lastSubGroup;
+        uint8_t lastGroup = 255;
+        for (auto& entry : result) {
+            if (!entry.subGroup.empty() &&
+                (entry.subGroup != lastSubGroup || entry.group != lastGroup)) {
+                PickerEntry header;
+                header.name = entry.subGroup;
+                header.subGroup = entry.subGroup;
+                header.group = entry.group;
+                header.formID = 0;
+                header.enabled = false;
+                withHeaders.push_back(std::move(header));
+            }
+            lastSubGroup = entry.subGroup;
+            lastGroup = entry.group;
+            withHeaders.push_back(std::move(entry));
+        }
+        result = std::move(withHeaders);
+    }
 
     logger::debug("ContainerRegistry::BuildPickerList: {} entries from {} sources",
                   result.size(), m_sources.size());

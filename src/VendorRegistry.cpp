@@ -255,13 +255,11 @@ int VendorRegistry::Validate() {
 }
 
 void VendorRegistry::LoadWhitelist() {
-    auto iniPath = Settings::GetINIPath();
-    if (iniPath.empty()) {
-        logger::warn("VendorRegistry::LoadWhitelist: could not determine INI path");
+    auto dir = Settings::GetDataDir();
+    if (dir.empty()) {
+        logger::warn("VendorRegistry::LoadWhitelist: could not determine data dir");
         return;
     }
-
-    auto dir = iniPath.parent_path();
     auto* dh = RE::TESDataHandler::GetSingleton();
     if (!dh) {
         logger::error("VendorRegistry::LoadWhitelist: TESDataHandler not available");
@@ -275,14 +273,14 @@ void VendorRegistry::LoadWhitelist() {
     std::error_code ec;
     for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
         if (!entry.is_regular_file()) continue;
-        auto filename = entry.path().filename().string();
+        std::string filename;
+        try { filename = entry.path().filename().string(); }
+        catch (const std::system_error&) { continue; }  // skip non-ANSI filenames
         if (filename.size() < 9) continue;  // "SLID_X.ini" minimum
         auto lower = filename;
         std::transform(lower.begin(), lower.end(), lower.begin(),
             [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         if (lower.find("slid_") == std::string::npos || lower.substr(lower.size() - 4) != ".ini") continue;
-        // Skip mod author export file — it's meant to be renamed and shipped, not loaded as-is
-        if (lower == "slid_modauthorexport.ini") continue;
 
         std::ifstream file(entry.path());
         if (!file.is_open()) continue;

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 # ---- Versioning ----
 set(VERSION_MAJOR 1)
-set(VERSION_MINOR 1)
+set(VERSION_MINOR 2)
 set(VERSION_PATCH 0)
 
 # ---- Project ----
@@ -86,6 +86,7 @@ set(SOURCES
     src/KWFContainerSource.cpp
     src/TaggedContainerSource.cpp
     src/SCIEContainerSource.cpp
+    src/ContainerListSource.cpp
     src/CellScanContainerSource.cpp
     src/OriginPanel.cpp
     src/HoldRemove.cpp

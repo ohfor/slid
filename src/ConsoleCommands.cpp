@@ -129,13 +129,6 @@ namespace ConsoleCommands {
                 RE::BSTEventSource<RE::TESTopicInfoEvent>*) override {
 
                 if (!a_event) return RE::BSEventNotifyControl::kContinue;
-
-                // Log the event for debugging
-                logger::debug("TopicInfoEvent: speaker={:08X}, info={:08X}, type={}",
-                              a_event->speakerRef ? a_event->speakerRef->GetFormID() : 0,
-                              a_event->topicInfoFormID,
-                              a_event->type);
-
                 if (a_event->type != 0) return RE::BSEventNotifyControl::kContinue;
 
                 if (a_event->topicInfoFormID == g_vendorAcceptInfoID && g_vendorAcceptInfoID != 0) {
@@ -159,6 +152,49 @@ namespace ConsoleCommands {
             auto formID = g_capturedTarget.exchange(0);
             if (formID == 0) return nullptr;
             return RE::TESForm::LookupByID<RE::TESObjectREFR>(formID);
+        }
+
+        // --- Helper: naming flow for new network creation ---
+        void ShowNetworkNamingFlow(RE::FormID formID, const std::string& baseName) {
+            SKSE::GetTaskInterface()->AddTask([formID, baseName]() {
+                TagInputMenu::Menu::ShowWithCallback(T("$SLID_DlgNameLink"), baseName,
+                    [formID](const std::string& chosenName) {
+                        auto* mgr2 = NetworkManager::GetSingleton();
+
+                        // Deduplicate the chosen name
+                        auto existingNames = mgr2->GetNetworkNames();
+                        std::string finalName = chosenName;
+                        int suffix = 2;
+                        while (true) {
+                            bool taken = false;
+                            for (const auto& n : existingNames) {
+                                if (n == finalName) { taken = true; break; }
+                            }
+                            if (!taken) break;
+                            finalName = chosenName + " " + std::to_string(suffix++);
+                        }
+
+                        if (mgr2->CreateNetwork(finalName, formID)) {
+                            auto* ref2 = RE::TESForm::LookupByID<RE::TESObjectREFR>(formID);
+                            if (ref2) {
+                                Feedback::OnSetMaster(ref2);
+                            }
+
+                            std::string msg = TF("$SLID_NotifyNetworkCreated", finalName);
+                            RE::DebugNotification(msg.c_str());
+
+                            logger::info("SetMasterAuto: created network '{}' with master {:08X}",
+                                         finalName, formID);
+
+                            // Show welcome tutorial (first time only), then open config menu
+                            WelcomeMenu::TryShowWelcome();
+                            auto networkName = finalName;
+                            SKSE::GetTaskInterface()->AddTask([networkName]() {
+                                SLIDMenu::ConfigMenu::Show(networkName);
+                            });
+                        }
+                    });
+            });
         }
 
         // --- Native functions ---
@@ -218,48 +254,8 @@ namespace ConsoleCommands {
                 baseName = "Storage";
             }
 
-            auto formID = ref->GetFormID();
-
             // Show naming popup — network is created when user confirms
-            SKSE::GetTaskInterface()->AddTask([formID, baseName]() {
-                TagInputMenu::Menu::ShowWithCallback("Name Link", baseName,
-                    [formID](const std::string& chosenName) {
-                        auto* mgr2 = NetworkManager::GetSingleton();
-
-                        // Deduplicate the chosen name
-                        auto existingNames = mgr2->GetNetworkNames();
-                        std::string finalName = chosenName;
-                        int suffix = 2;
-                        while (true) {
-                            bool taken = false;
-                            for (const auto& n : existingNames) {
-                                if (n == finalName) { taken = true; break; }
-                            }
-                            if (!taken) break;
-                            finalName = chosenName + " " + std::to_string(suffix++);
-                        }
-
-                        if (mgr2->CreateNetwork(finalName, formID)) {
-                            auto* ref2 = RE::TESForm::LookupByID<RE::TESObjectREFR>(formID);
-                            if (ref2) {
-                                Feedback::OnSetMaster(ref2);
-                            }
-
-                            std::string msg = TF("$SLID_NotifyNetworkCreated", finalName);
-                            RE::DebugNotification(msg.c_str());
-
-                            logger::info("SetMasterAuto: created network '{}' with master {:08X}",
-                                         finalName, formID);
-
-                            // Show welcome tutorial (first time only), then open config menu
-                            WelcomeMenu::TryShowWelcome();
-                            auto networkName = finalName;
-                            SKSE::GetTaskInterface()->AddTask([networkName]() {
-                                SLIDMenu::ConfigMenu::Show(networkName);
-                            });
-                        }
-                    });
-            });
+            ShowNetworkNamingFlow(ref->GetFormID(), baseName);
 
             return RE::BSFixedString(baseName.c_str());
         }
@@ -517,7 +513,7 @@ namespace ConsoleCommands {
 
             // Multiple networks — MessageBox picker
             SKSE::GetTaskInterface()->AddTask([names]() {
-                UIHelper::ShowMessageBox("SLID: Choose Network", names,
+                UIHelper::ShowMessageBox(T("$SLID_DlgChooseNetwork"), names,
                     [names](int idx) {
                         if (idx >= 0 && idx < static_cast<int>(names.size())) {
                             auto name = names[idx];
@@ -971,8 +967,9 @@ namespace ConsoleCommands {
             auto* network = mgr->FindNetwork(a_networkName.c_str());
             if (!network) return 0;
 
-            // Count unique containers from filter stages + catch-all
+            // Count unique containers: master + filter stages + catch-all (deduplicated)
             std::set<RE::FormID> containers;
+            containers.insert(network->masterFormID);
             for (const auto& stage : network->filters) {
                 if (stage.containerFormID != 0) {
                     containers.insert(stage.containerFormID);
@@ -990,48 +987,42 @@ namespace ConsoleCommands {
             auto* network = mgr->FindNetwork(a_networkName.c_str());
             if (!network) return result;
 
-            // Collect unique containers with display names
-            std::vector<std::pair<RE::FormID, std::string>> containers;
-            for (const auto& stage : network->filters) {
-                if (stage.containerFormID != 0) {
-                    auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(stage.containerFormID);
-                    std::string name = T("$SLID_Container");
-                    if (ref) {
-                        if (mgr->IsTagged(stage.containerFormID)) {
-                            name = mgr->GetTagName(stage.containerFormID);
-                        } else if (ref->GetName() && ref->GetName()[0] != '\0') {
-                            name = ref->GetName();
-                        } else if (auto* base = ref->GetBaseObject()) {
-                            if (base->GetName() && base->GetName()[0] != '\0') {
-                                name = base->GetName();
-                            }
+            // Resolve display name for a container FormID
+            auto getDisplayName = [&](RE::FormID fid) -> std::string {
+                std::string name = T("$SLID_Container");
+                auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(fid);
+                if (ref) {
+                    if (mgr->IsTagged(fid)) {
+                        name = mgr->GetTagName(fid);
+                    } else if (ref->GetName() && ref->GetName()[0] != '\0') {
+                        name = ref->GetName();
+                    } else if (auto* base = ref->GetBaseObject()) {
+                        if (base->GetName() && base->GetName()[0] != '\0') {
+                            name = base->GetName();
                         }
                     }
-                    containers.emplace_back(stage.containerFormID, name);
                 }
+                return name;
+            };
+
+            std::set<RE::FormID> seen;
+            std::vector<std::pair<RE::FormID, std::string>> containers;
+
+            // Master first
+            containers.emplace_back(network->masterFormID, getDisplayName(network->masterFormID));
+            seen.insert(network->masterFormID);
+
+            // Filter stage containers (deduplicated, skip master and Pass)
+            for (const auto& stage : network->filters) {
+                if (stage.containerFormID == 0) continue;
+                if (!seen.insert(stage.containerFormID).second) continue;
+                containers.emplace_back(stage.containerFormID, getDisplayName(stage.containerFormID));
             }
 
-            // Add catch-all if different
-            if (network->catchAllFormID != 0) {
-                bool found = false;
-                for (const auto& c : containers) {
-                    if (c.first == network->catchAllFormID) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(network->catchAllFormID);
-                    std::string name = "Catch-All";
-                    if (ref) {
-                        if (mgr->IsTagged(network->catchAllFormID)) {
-                            name = mgr->GetTagName(network->catchAllFormID) + " (Catch-All)";
-                        } else if (ref->GetName() && ref->GetName()[0] != '\0') {
-                            name = std::string(ref->GetName()) + " (Catch-All)";
-                        }
-                    }
-                    containers.emplace_back(network->catchAllFormID, name);
-                }
+            // Catch-all if unique
+            if (network->catchAllFormID != 0 && seen.insert(network->catchAllFormID).second) {
+                containers.emplace_back(network->catchAllFormID,
+                                        getDisplayName(network->catchAllFormID) + " (Catch-All)");
             }
 
             for (const auto& c : containers) {
@@ -1045,19 +1036,19 @@ namespace ConsoleCommands {
             auto* network = mgr->FindNetwork(a_networkName.c_str());
             if (!network) return;
 
-            // Build list of container FormIDs in same order as GetNetworkContainerNames
+            // Build deduplicated list in same order as GetNetworkContainerNames
+            std::set<RE::FormID> seen;
             std::vector<RE::FormID> containers;
+            // Master first (index 0)
+            containers.push_back(network->masterFormID);
+            seen.insert(network->masterFormID);
             for (const auto& stage : network->filters) {
-                if (stage.containerFormID != 0) {
-                    containers.push_back(stage.containerFormID);
-                }
+                if (stage.containerFormID == 0) continue;
+                if (!seen.insert(stage.containerFormID).second) continue;
+                containers.push_back(stage.containerFormID);
             }
-            if (network->catchAllFormID != 0) {
-                bool found = false;
-                for (auto fid : containers) {
-                    if (fid == network->catchAllFormID) { found = true; break; }
-                }
-                if (!found) containers.push_back(network->catchAllFormID);
+            if (network->catchAllFormID != 0 && seen.insert(network->catchAllFormID).second) {
+                containers.push_back(network->catchAllFormID);
             }
 
             if (a_index < 0 || a_index >= static_cast<int32_t>(containers.size())) return;
@@ -1240,6 +1231,93 @@ namespace ConsoleCommands {
         }
 
         // =================================================================
+        // MCM Native Functions - Presets
+        // =================================================================
+
+        int32_t GetPresetCount(RE::StaticFunctionTag*) {
+            return static_cast<int32_t>(NetworkManager::GetSingleton()->GetPresetCount());
+        }
+
+        std::vector<RE::BSFixedString> GetPresetNames(RE::StaticFunctionTag*) {
+            std::vector<RE::BSFixedString> result;
+            const auto& presets = NetworkManager::GetSingleton()->GetPresets();
+            for (const auto& p : presets) {
+                result.push_back(RE::BSFixedString(p.name.c_str()));
+            }
+            return result;
+        }
+
+        RE::BSFixedString GetPresetStatus(RE::StaticFunctionTag*, RE::BSFixedString a_name) {
+            auto* mgr = NetworkManager::GetSingleton();
+            const auto* preset = mgr->FindPresetByName(a_name.c_str());
+            if (!preset || preset->resolvedMasterFormID == 0) {
+                return "Unavailable";
+            }
+            return "Available";
+        }
+
+        RE::BSFixedString GetPresetWarningsNative(RE::StaticFunctionTag*, RE::BSFixedString a_name) {
+            return RE::BSFixedString(NetworkManager::GetSingleton()->GetPresetWarnings(a_name.c_str()).c_str());
+        }
+
+        bool ActivatePresetNative(RE::StaticFunctionTag*, RE::BSFixedString a_name) {
+            return NetworkManager::GetSingleton()->ActivatePreset(a_name.c_str());
+        }
+
+        RE::BSFixedString GetPresetMasterConflict(RE::StaticFunctionTag*, RE::BSFixedString a_name) {
+            auto* mgr = NetworkManager::GetSingleton();
+            const auto* preset = mgr->FindPresetByName(a_name.c_str());
+            if (!preset || preset->resolvedMasterFormID == 0) return "";
+
+            auto conflict = mgr->FindNetworkByMaster(preset->resolvedMasterFormID);
+            if (!conflict.empty()) {
+                logger::info("GetPresetMasterConflict '{}': master {:08X} conflicts with network '{}'",
+                             a_name.c_str(), preset->resolvedMasterFormID, conflict);
+            }
+            return RE::BSFixedString(conflict.c_str());
+        }
+
+        void ReloadPresets(RE::StaticFunctionTag*) {
+            NetworkManager::GetSingleton()->ReloadPresets();
+        }
+
+        RE::BSFixedString GetPresetDescription(RE::StaticFunctionTag*, RE::BSFixedString a_name) {
+            auto* preset = NetworkManager::GetSingleton()->FindPresetByName(a_name.c_str());
+            return preset ? RE::BSFixedString(preset->description.c_str()) : "";
+        }
+
+        bool IsPresetUserGenerated(RE::StaticFunctionTag*, RE::BSFixedString a_name) {
+            auto* preset = NetworkManager::GetSingleton()->FindPresetByName(a_name.c_str());
+            return preset ? preset->userGenerated : false;
+        }
+
+        int32_t GetContainerListCount(RE::StaticFunctionTag*) {
+            return static_cast<int32_t>(NetworkManager::GetSingleton()->GetContainerListCount());
+        }
+
+        std::vector<RE::BSFixedString> GetContainerListNames(RE::StaticFunctionTag*) {
+            std::vector<RE::BSFixedString> result;
+            const auto& lists = NetworkManager::GetSingleton()->GetContainerLists();
+            for (const auto& cl : lists) {
+                result.push_back(RE::BSFixedString(cl.name.c_str()));
+            }
+            return result;
+        }
+
+        RE::BSFixedString GetContainerListDescription(RE::StaticFunctionTag*, RE::BSFixedString a_name) {
+            auto* cl = NetworkManager::GetSingleton()->FindContainerListByName(a_name.c_str());
+            return cl ? RE::BSFixedString(cl->description.c_str()) : "";
+        }
+
+        bool IsContainerListEnabled(RE::StaticFunctionTag*, RE::BSFixedString a_name) {
+            return NetworkManager::GetSingleton()->IsContainerListEnabled(a_name.c_str());
+        }
+
+        void SetContainerListEnabled(RE::StaticFunctionTag*, RE::BSFixedString a_name, bool a_enabled) {
+            NetworkManager::GetSingleton()->SetContainerListEnabled(a_name.c_str(), a_enabled);
+        }
+
+        // =================================================================
         // MCM Native Functions - About
         // =================================================================
 
@@ -1316,102 +1394,283 @@ namespace ConsoleCommands {
             return fmt::format("{}|0x{:X}", pluginName, localID);
         }
 
-        bool GenerateModAuthorExport(RE::StaticFunctionTag*, bool a_networks, bool a_filters, bool a_vendors) {
-            // Build output path
-            auto path = Settings::GetINIPath();
-            auto dir = path.parent_path();
-            auto outputPath = dir / "SLID_ModAuthorExport.ini";
+        /// Extract plugin name from a runtime FormID, or empty string if not resolvable
+        std::string GetPluginNameForFormID(RE::FormID a_formID) {
+            if (a_formID == 0) return "";
+            auto* dataHandler = RE::TESDataHandler::GetSingleton();
+            if (!dataHandler) return "";
 
-            std::ofstream out(outputPath);
-            if (!out.is_open()) {
-                logger::error("GenerateModAuthorExport: failed to open {}", outputPath.string());
+            bool isLight = (a_formID & 0xFF000000) == 0xFE000000;
+            if (isLight) {
+                auto lightIndex = (a_formID >> 12) & 0xFFF;
+                for (auto* file : dataHandler->files) {
+                    if (file && file->IsLight() && file->GetSmallFileCompileIndex() == lightIndex) {
+                        return std::string(file->GetFilename());
+                    }
+                }
+            } else {
+                auto modIndex = (a_formID >> 24) & 0xFF;
+                auto* file = dataHandler->LookupLoadedModByIndex(static_cast<uint8_t>(modIndex));
+                if (file) {
+                    return std::string(file->GetFilename());
+                }
+            }
+            return "";
+        }
+
+        /// Get a display name for a container FormID (tag name or base object name)
+        std::string GetContainerDisplayName(NetworkManager* a_mgr, RE::FormID a_formID) {
+            if (a_formID == 0) return "";
+            if (a_mgr->IsTagged(a_formID)) {
+                return a_mgr->GetTagName(a_formID);
+            }
+            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
+            if (ref) {
+                if (ref->GetName() && ref->GetName()[0] != '\0') return ref->GetName();
+                if (auto* base = ref->GetBaseObject()) {
+                    if (base->GetName() && base->GetName()[0] != '\0') return base->GetName();
+                }
+            }
+            return "";
+        }
+
+        bool GeneratePresetINI(RE::StaticFunctionTag*, RE::BSFixedString a_networkName, RE::BSFixedString a_presetName) {
+            std::string networkName = a_networkName.c_str();
+            std::string presetName = a_presetName.c_str();
+            if (networkName.empty()) {
+                logger::error("GeneratePresetINI: empty network name");
                 return false;
             }
 
-            out << "; SLID Mod Author Export\n";
-            out << "; Generated by SLID v" << Version::MAJOR << "." << Version::MINOR << "." << Version::PATCH << "\n";
-            out << ";\n";
-            out << "; This file is NOT loaded by SLID — it's a template for mod authors.\n";
-            out << "; To use: rename to YourMod_SLID.ini and ship with your mod.\n";
-            out << "; Any file matching *SLID_*.ini (except this one) will be loaded.\n";
-            out << ";\n";
-            out << "; Entries can be disabled by a patch INI setting = false\n\n";
-
             auto* mgr = NetworkManager::GetSingleton();
+            auto* network = mgr->FindNetwork(networkName);
+            if (!network) {
+                logger::error("GeneratePresetINI: network '{}' not found", networkName);
+                return false;
+            }
 
-            if (a_networks) {
-                const auto& networks = mgr->GetNetworks();
-                if (!networks.empty()) {
-                    out << "; =============================================================================\n";
-                    out << "; NETWORKS\n";
-                    out << "; =============================================================================\n";
-                    out << "; Creates storage networks with the specified master container.\n";
-                    out << "; Filter pipeline and catch-all are configured by the user.\n\n";
+            // Use custom preset name if provided, otherwise network name
+            if (presetName.empty()) {
+                presetName = networkName;
+            }
 
-                    for (const auto& net : networks) {
-                        out << "[Network:" << net.name << "]\n";
-                        out << "Master = " << FormatFormIDForExport(net.masterFormID) << "\n\n";
-                    }
-                }
-
-                // Export sell container
-                auto sellFormID = mgr->GetSellContainerFormID();
-                if (sellFormID != 0) {
-                    out << "; =============================================================================\n";
-                    out << "; SELL CONTAINER\n";
-                    out << "; =============================================================================\n";
-                    out << "; Designates a container for automated sales.\n\n";
-
-                    out << "[SellContainer]\n";
-                    out << FormatFormIDForExport(sellFormID) << " = true\n\n";
+            // Sanitize name for filename
+            std::string sanitized = presetName;
+            for (auto& c : sanitized) {
+                if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') {
+                    c = '_';
                 }
             }
 
-            if (a_filters) {
-                // Export tagged containers (for naming/identification)
-                const auto& tags = mgr->GetTagRegistry();
-                if (!tags.empty()) {
-                    out << "; =============================================================================\n";
-                    out << "; TAGGED CONTAINERS\n";
-                    out << "; =============================================================================\n";
-                    out << "; Display names for containers in the picker UI.\n";
-                    out << "; Format: Plugin.esp|0xFormID|Display Name = true\n\n";
+            auto dir = Settings::GetDataDir();
+            auto outputPath = dir / fmt::format("SLID_GEN_{}.ini", sanitized);
 
-                    out << "[TaggedContainers]\n";
-                    for (const auto& [formID, tagData] : tags) {
-                        out << FormatFormIDForExport(formID) << "|" << tagData.customName << " = true\n";
-                    }
-                    out << "\n";
+            std::ofstream out(outputPath);
+            if (!out.is_open()) {
+                logger::error("GeneratePresetINI: failed to open {}", outputPath.string());
+                return false;
+            }
+
+            // Collect all unique container FormIDs and count assignments
+            int assignedCount = 0;
+            std::set<RE::FormID> uniqueContainers;
+            std::set<RE::FormID> allFormIDs;  // all FormIDs referenced in the network
+            allFormIDs.insert(network->masterFormID);
+            for (const auto& stage : network->filters) {
+                if (stage.containerFormID != 0 && stage.containerFormID != network->masterFormID) {
+                    uniqueContainers.insert(stage.containerFormID);
+                    allFormIDs.insert(stage.containerFormID);
+                    ++assignedCount;
+                }
+            }
+            if (network->catchAllFormID != 0) {
+                allFormIDs.insert(network->catchAllFormID);
+            }
+
+            // Collect all unique non-base-game plugins referenced by network containers
+            static const std::set<std::string, std::less<>> kBaseGamePlugins = {
+                "Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"
+            };
+            std::set<std::string> requiredPlugins;
+            for (auto fid : allFormIDs) {
+                auto plugin = GetPluginNameForFormID(fid);
+                if (!plugin.empty() && !kBaseGamePlugins.count(plugin)) {
+                    requiredPlugins.insert(plugin);
                 }
             }
 
-            if (a_vendors) {
-                // Export vendor whitelist
-                const auto& vendors = VendorRegistry::GetSingleton()->GetVendors();
-                bool hasActive = false;
-                for (const auto& v : vendors) {
-                    if (v.active) { hasActive = true; break; }
-                }
-                if (hasActive) {
-                    out << "; =============================================================================\n";
-                    out << "; VENDOR WHITELIST\n";
-                    out << "; =============================================================================\n";
-                    out << "; NPCs that can be offered wholesale trade arrangements.\n";
-                    out << "; Format: Plugin.esp|0xFormID|VendorName = true\n\n";
+            // --- Header comment block ---
+            out << "; =============================================================================\n";
+            out << "; SLID Preset: " << presetName << "\n";
+            out << "; Generated by SLID v" << Version::MAJOR << "." << Version::MINOR << "." << Version::PATCH << "\n";
+            out << "; =============================================================================\n";
+            out << ";\n";
+            out << "; " << uniqueContainers.size() << " containers linked, " << assignedCount << " filter assignments.\n";
+            out << ";\n";
+            out << "; Any file matching *SLID_*.ini will be loaded by SLID.\n";
+            out << "\n";
 
-                    out << "[Vendors]\n";
-                    for (const auto& v : vendors) {
-                        if (v.active) {
-                            out << FormatFormIDForExport(v.npcBaseFormID) << "|" << v.vendorName << " = true\n";
-                        }
+            // --- [Preset:Name] ---
+            auto masterComment = GetContainerDisplayName(mgr, network->masterFormID);
+            out << "[Preset:" << presetName << "]\n";
+            out << "Master = " << FormatFormIDForExport(network->masterFormID);
+            if (!masterComment.empty()) {
+                out << "  ; " << masterComment;
+            }
+            out << "\n";
+            for (const auto& plugin : requiredPlugins) {
+                out << "RequirePlugin = " << plugin << "\n";
+            }
+            // Auto-generate description with timestamp
+            {
+                auto now = std::chrono::system_clock::now();
+                auto time_t = std::chrono::system_clock::to_time_t(now);
+                std::tm tm{};
+                localtime_s(&tm, &time_t);
+                char dateBuf[64];
+                std::strftime(dateBuf, sizeof(dateBuf), "%d-%b-%Y at %H:%M", &tm);
+                out << "Description = Generated from '" << networkName << "' on " << dateBuf << "\n";
+            }
+            out << "UserGenerated = true\n";
+            out << "\n";
+
+            // --- [Preset:Name:Filters] ---
+            out << "[Preset:" << presetName << ":Filters]\n";
+            for (const auto& stage : network->filters) {
+                out << stage.filterID << " = ";
+                if (stage.containerFormID == network->masterFormID) {
+                    out << "Keep";
+                } else if (stage.containerFormID == 0) {
+                    out << "Pass";
+                } else {
+                    out << FormatFormIDForExport(stage.containerFormID);
+                    auto comment = GetContainerDisplayName(mgr, stage.containerFormID);
+                    if (!comment.empty()) {
+                        out << "  ; " << comment;
+                    }
+                }
+                out << "\n";
+            }
+            // CatchAll line
+            if (network->catchAllFormID == 0 || network->catchAllFormID == network->masterFormID) {
+                out << "CatchAll = Keep\n";
+            } else {
+                out << "CatchAll = " << FormatFormIDForExport(network->catchAllFormID);
+                auto comment = GetContainerDisplayName(mgr, network->catchAllFormID);
+                if (!comment.empty()) {
+                    out << "  ; " << comment;
+                }
+                out << "\n";
+            }
+            out << "\n";
+
+            // --- [Preset:Name:Tags] ---
+            // Collect all unique container FormIDs that belong to this network
+            std::set<RE::FormID> networkContainers;
+            networkContainers.insert(network->masterFormID);
+            for (const auto& stage : network->filters) {
+                if (stage.containerFormID != 0) {
+                    networkContainers.insert(stage.containerFormID);
+                }
+            }
+            if (network->catchAllFormID != 0) {
+                networkContainers.insert(network->catchAllFormID);
+            }
+
+            // Write tags for network containers
+            bool hasTagSection = false;
+            // Master first
+            if (mgr->IsTagged(network->masterFormID)) {
+                if (!hasTagSection) {
+                    out << "[Preset:" << presetName << ":Tags]\n";
+                    hasTagSection = true;
+                }
+                out << FormatFormIDForExport(network->masterFormID) << " = " << mgr->GetTagName(network->masterFormID) << "\n";
+            }
+            // Then other network containers
+            for (auto fid : networkContainers) {
+                if (fid == network->masterFormID) continue;  // already written
+                if (mgr->IsTagged(fid)) {
+                    if (!hasTagSection) {
+                        out << "[Preset:" << presetName << ":Tags]\n";
+                        hasTagSection = true;
+                    }
+                    out << FormatFormIDForExport(fid) << " = " << mgr->GetTagName(fid) << "\n";
+                }
+            }
+            if (hasTagSection) {
+                out << "\n";
+            }
+
+            // --- [Preset:Name:Whoosh] ---
+            if (network->whooshConfigured && !network->whooshFilters.empty()) {
+                // Map individual filter IDs back to family roots
+                auto* filterReg = FilterRegistry::GetSingleton();
+                std::set<std::string> rootIDs;  // sorted set for deterministic output
+                for (const auto& filterID : network->whooshFilters) {
+                    auto* filter = filterReg->GetFilter(filterID);
+                    if (!filter) continue;
+                    // Walk to root
+                    const IFilter* current = filter;
+                    while (current->GetParent()) {
+                        current = current->GetParent();
+                    }
+                    rootIDs.insert(std::string(current->GetID()));
+                }
+
+                if (!rootIDs.empty()) {
+                    out << "[Preset:" << presetName << ":Whoosh]\n";
+                    for (const auto& rootID : rootIDs) {
+                        out << rootID << " = true\n";
                     }
                     out << "\n";
                 }
             }
 
             out.close();
-            logger::info("GenerateModAuthorExport: wrote {}", outputPath.string());
+            logger::info("GeneratePresetINI: wrote {} (preset '{}' from network '{}')",
+                         outputPath.string(), presetName, networkName);
             return true;
+        }
+
+        void BeginGeneratePreset(RE::StaticFunctionTag*, RE::BSFixedString a_networkName) {
+            std::string networkName = a_networkName.c_str();
+            if (networkName.empty()) {
+                logger::error("BeginGeneratePreset: empty network name");
+                return;
+            }
+
+            // Close the journal menu (MCM)
+            if (auto* msgQueue = RE::UIMessageQueue::GetSingleton()) {
+                msgQueue->AddMessage("Journal Menu", RE::UI_MESSAGE_TYPE::kHide, nullptr);
+            }
+
+            // Wait several frames for the journal menu to fully close before opening TagInputMenu.
+            // A single AddTask (1 frame) is too fast — the close animation hasn't finished.
+            auto state = std::make_shared<std::pair<int, std::string>>(10, networkName);
+            auto tick = std::make_shared<std::function<void()>>();
+            *tick = [state, tick]() {
+                if (--state->first > 0) {
+                    SKSE::GetTaskInterface()->AddTask(std::function<void()>(*tick));
+                    return;
+                }
+                auto& netName = state->second;
+                TagInputMenu::Menu::ShowWithCallback(T("$SLID_DlgNamePreset"), netName,
+                    [netName](const std::string& chosenName) {
+                        if (chosenName.empty()) return;
+
+                        RE::BSFixedString netBS(netName.c_str());
+                        RE::BSFixedString nameBS(chosenName.c_str());
+                        bool result = GeneratePresetINI(nullptr, netBS, nameBS);
+                        if (result) {
+                            NetworkManager::GetSingleton()->ReloadPresets();
+                            RE::DebugNotification(T("$SLID_ExportGenerated").c_str());
+                        } else {
+                            RE::DebugNotification(T("$SLID_ExportFailed").c_str());
+                        }
+                    });
+            };
+            SKSE::GetTaskInterface()->AddTask(std::function<void()>(*tick));
         }
     }
 
@@ -1512,11 +1771,28 @@ namespace ConsoleCommands {
         a_vm->RegisterFunction("GetVendorBonusPercent"sv, className, GetVendorBonusPercent);
         a_vm->RegisterFunction("GetVendorLastVisit"sv, className, GetVendorLastVisit);
 
+        // MCM Presets
+        a_vm->RegisterFunction("GetPresetCount"sv, className, GetPresetCount);
+        a_vm->RegisterFunction("GetPresetNames"sv, className, GetPresetNames);
+        a_vm->RegisterFunction("GetPresetStatus"sv, className, GetPresetStatus);
+        a_vm->RegisterFunction("GetPresetWarnings"sv, className, GetPresetWarningsNative);
+        a_vm->RegisterFunction("ActivatePreset"sv, className, ActivatePresetNative);
+        a_vm->RegisterFunction("GetPresetMasterConflict"sv, className, GetPresetMasterConflict);
+        a_vm->RegisterFunction("ReloadPresets"sv, className, ReloadPresets);
+        a_vm->RegisterFunction("GetPresetDescription"sv, className, GetPresetDescription);
+        a_vm->RegisterFunction("IsPresetUserGenerated"sv, className, IsPresetUserGenerated);
+        a_vm->RegisterFunction("GetContainerListCount"sv, className, GetContainerListCount);
+        a_vm->RegisterFunction("GetContainerListNames"sv, className, GetContainerListNames);
+        a_vm->RegisterFunction("GetContainerListDescription"sv, className, GetContainerListDescription);
+        a_vm->RegisterFunction("IsContainerListEnabled"sv, className, IsContainerListEnabled);
+        a_vm->RegisterFunction("SetContainerListEnabled"sv, className, SetContainerListEnabled);
+        a_vm->RegisterFunction("BeginGeneratePreset"sv, className, BeginGeneratePreset);
+
         // MCM About
         a_vm->RegisterFunction("GetPluginVersion"sv, className, GetPluginVersion);
 
         // MCM Mod Author / Debug
-        a_vm->RegisterFunction("GenerateModAuthorExport"sv, className, GenerateModAuthorExport);
+        a_vm->RegisterFunction("GeneratePresetINI"sv, className, GeneratePresetINI);
         a_vm->RegisterFunction("DumpContainers"sv, className, DumpContainers);
         a_vm->RegisterFunction("DumpFilters"sv, className, DumpFilters);
         a_vm->RegisterFunction("DumpVendors"sv, className, DumpVendors);

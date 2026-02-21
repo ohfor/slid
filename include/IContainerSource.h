@@ -52,6 +52,7 @@ struct PickerEntry {
     uint32_t color = 0;      // 0 = use default per-category color
     uint8_t group = 0;       // 0=special, 1=follower, 2=tagged, 3=SCIE, 4=scanned
     bool enabled = true;     // false = visible but not selectable
+    std::string subGroup;    // optional sub-section label within group (e.g. container list name)
 };
 
 class IContainerSource {

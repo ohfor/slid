@@ -189,27 +189,25 @@ namespace {
     // -----------------------------------------------------------------------
 
     static std::vector<FilterDef> ParseFilterINIs() {
-        auto iniPath = Settings::GetINIPath();
-        if (iniPath.empty()) {
-            logger::warn("FilterRegistry: could not determine INI path for filter definitions");
+        auto dir = Settings::GetDataDir();
+        if (dir.empty()) {
+            logger::warn("FilterRegistry: could not determine data dir for filter definitions");
             return {};
         }
-
-        auto dir = iniPath.parent_path();
 
         // Collect matching files, sorted alphabetically for deterministic order
         std::vector<std::filesystem::path> iniFiles;
         std::error_code ec;
         for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
             if (!entry.is_regular_file()) continue;
-            auto filename = entry.path().filename().string();
+            std::string filename;
+            try { filename = entry.path().filename().string(); }
+            catch (const std::system_error&) { continue; }  // skip non-ANSI filenames
             if (filename.size() < 9) continue;  // "SLID_X.ini" minimum
             auto lower = filename;
             std::transform(lower.begin(), lower.end(), lower.begin(),
                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             if (lower.find("slid_") == std::string::npos || lower.substr(lower.size() - 4) != ".ini") continue;
-            // Skip mod author export file — it's meant to be renamed and shipped, not loaded as-is
-            if (lower == "slid_modauthorexport.ini") continue;
             iniFiles.push_back(entry.path());
         }
         std::sort(iniFiles.begin(), iniFiles.end());
@@ -223,7 +221,8 @@ namespace {
             std::ifstream file(filePath);
             if (!file.is_open()) continue;
 
-            logger::info("FilterRegistry: scanning {} for filter definitions", filePath.filename().string());
+            try { logger::info("FilterRegistry: scanning {} for filter definitions", filePath.filename().string()); }
+            catch (const std::system_error&) {}
 
             std::string line;
             std::string currentFilterID;  // empty = not in a [Filter:X] section

@@ -13,6 +13,7 @@ public:
         uint32_t    color = 0xCCCCCC;
         bool        enabled = true;  // false = visible but not selectable (dimmed)
         uint8_t     group = 0;    // visual separator drawn between different groups
+        std::string subGroup;     // sub-section label (non-empty = belongs to named section)
     };
 
     struct Config {

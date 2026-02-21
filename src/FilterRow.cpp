@@ -91,6 +91,7 @@ namespace {
             e.sublabel = pe.location;
             e.group = pe.group;
             e.enabled = pe.enabled;
+            e.subGroup = pe.subGroup;
             if (!pe.enabled) {
                 e.color = 0x555555;
             } else if (pe.color != 0) {

@@ -8,6 +8,7 @@
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 struct TaggedContainer {
@@ -30,6 +31,51 @@ struct SaleTransaction {
     int32_t     goldEarned;
     float       pricePerUnit;  // float for display (base * percent)
     float       gameTime;
+};
+
+struct PresetFilterStage {
+    std::string filterID;         // e.g. "weapons"
+    std::string containerRef;     // raw INI: "Skyrim.esm|0x1234"
+};
+
+struct PresetTag {
+    std::string containerRef;     // raw INI ref
+    std::string displayName;
+};
+
+struct PresetWarning {
+    std::string plugin;   // empty = unconditional, otherwise shown if plugin is loaded
+    std::string message;
+};
+
+struct NetworkPreset {
+    std::string name;                              // from [Preset:Name]
+    std::string description;                       // optional, shown in MCM info text
+    bool userGenerated = false;                    // true = exported by player, false = mod-authored
+    std::vector<std::string> requirePlugins;        // empty = always available; all must be loaded
+    std::string masterRef;                         // raw INI ref
+    std::string catchAllRef;                       // empty = use master
+    std::vector<PresetFilterStage> filters;        // ordered
+    std::vector<PresetTag> tags;
+    std::unordered_set<std::string> whooshFilters;
+    bool whooshConfigured = false;
+    std::vector<PresetWarning> warnings;           // activation notices
+
+    // Resolved at load time
+    RE::FormID resolvedMasterFormID = 0;
+};
+
+struct ContainerListEntry {
+    std::string containerRef;    // raw INI: "Plugin.esp|0xABCD"
+    std::string displayName;     // optional override from INI value
+    RE::FormID resolvedFormID = 0;
+};
+
+struct ContainerList {
+    std::string name;                              // from [ContainerList:Name]
+    std::string description;
+    std::vector<std::string> requirePlugins;
+    std::vector<ContainerListEntry> containers;    // resolved at load time
 };
 
 class NetworkManager {
@@ -93,6 +139,25 @@ public:
     // INI loading (networks, tags, sell container from *SLID_*.ini files)
     void LoadConfigFromINI();
 
+    // Re-scan presets from INI files (clears and rebuilds m_presets)
+    void ReloadPresets();
+
+    // Presets (INI-declared dormant networks, activated by player)
+    const std::vector<NetworkPreset>& GetPresets() const;
+    size_t GetPresetCount() const;
+    const NetworkPreset* FindPresetByName(const std::string& a_name) const;
+    bool ActivatePreset(const std::string& a_name);
+    std::string GetPresetWarnings(const std::string& a_name) const;
+
+    // Container lists (INI-declared container groups, available in picker)
+    const std::vector<ContainerList>& GetContainerLists() const;
+    size_t GetContainerListCount() const;
+    const ContainerList* FindContainerListByName(const std::string& a_name) const;
+
+    // Container list enable/disable (per-save, persisted via cosave)
+    bool IsContainerListEnabled(const std::string& a_name) const;
+    void SetContainerListEnabled(const std::string& a_name, bool a_enabled);
+
     // Debug
     void DumpToLog() const;
 
@@ -109,6 +174,7 @@ private:
     void LoadMods(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
     void LoadSell(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
     void LoadTransactionLog(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
+    void LoadContainerListState(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
     void Revert();
 
     // Build default empty filter list
@@ -120,6 +186,9 @@ private:
     std::set<std::string> m_recognizedMods;
     SellContainerState m_sellState;
     std::vector<SaleTransaction> m_transactionLog;
+    std::vector<NetworkPreset> m_presets;
+    std::vector<ContainerList> m_containerLists;
+    std::set<std::string> m_disabledContainerLists;
 
     static constexpr uint32_t kUniqueID = 'SLID';
     static constexpr uint32_t kNetworkRecord = 'NETW';
@@ -127,9 +196,11 @@ private:
     static constexpr uint32_t kModsRecord = 'MODS';
     static constexpr uint32_t kSellRecord = 'SELL';
     static constexpr uint32_t kTlogRecord = 'TLOG';
+    static constexpr uint32_t kClstRecord = 'CLST';
     static constexpr uint32_t kNetworkVersion = 4;
     static constexpr uint32_t kTagsVersion = 1;
     static constexpr uint32_t kModsVersion = 1;
     static constexpr uint32_t kSellVersion = 1;
     static constexpr uint32_t kTlogVersion = 1;
+    static constexpr uint32_t kClstVersion = 1;
 };

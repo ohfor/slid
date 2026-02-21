@@ -115,6 +115,7 @@ void NetworkManager::ClearAll() {
     m_recognizedMods.clear();
     m_sellState = SellContainerState{};
     m_transactionLog.clear();
+    m_disabledContainerLists.clear();
     VendorRegistry::GetSingleton()->ClearAll();
     logger::info("ClearAll: all SLID data cleared");
 }
@@ -420,6 +421,23 @@ void NetworkManager::Save(SKSE::SerializationInterface* a_intfc) const {
 
     logger::info("Saved {} transaction log entries to cosave", txCount);
 
+    // Write container list state record
+    if (!a_intfc->OpenRecord(kClstRecord, kClstVersion)) {
+        logger::error("Failed to open CLST cosave record");
+        return;
+    }
+
+    uint32_t disabledCount = static_cast<uint32_t>(m_disabledContainerLists.size());
+    a_intfc->WriteRecordData(&disabledCount, sizeof(disabledCount));
+
+    for (const auto& name : m_disabledContainerLists) {
+        uint16_t nameLen = static_cast<uint16_t>(name.size());
+        a_intfc->WriteRecordData(&nameLen, sizeof(nameLen));
+        a_intfc->WriteRecordData(name.data(), nameLen);
+    }
+
+    logger::info("Saved {} disabled container lists to cosave", disabledCount);
+
     // Write vendor registry record
     VendorRegistry::GetSingleton()->Save(a_intfc);
 }
@@ -446,6 +464,9 @@ void NetworkManager::Load(SKSE::SerializationInterface* a_intfc) {
             case kTlogRecord:
                 LoadTransactionLog(a_intfc, version);
                 break;
+            case kClstRecord:
+                LoadContainerListState(a_intfc, version);
+                break;
             case VendorRegistry::kVendorRecord:
                 VendorRegistry::GetSingleton()->Load(a_intfc, version);
                 break;
@@ -463,6 +484,7 @@ void NetworkManager::Revert() {
     m_recognizedMods.clear();
     m_sellState = SellContainerState{};
     m_transactionLog.clear();
+    m_disabledContainerLists.clear();
     VendorRegistry::GetSingleton()->Revert();
     logger::info("Cosave state reverted");
 }
@@ -646,8 +668,7 @@ static RE::FormID ParseFormIDRef(const std::string& a_ref, RE::TESDataHandler* a
 }
 
 void NetworkManager::LoadConfigFromINI() {
-    auto path = Settings::GetINIPath();
-    auto dir = path.parent_path();
+    auto dir = Settings::GetDataDir();
 
     auto* dh = RE::TESDataHandler::GetSingleton();
     if (!dh) {
@@ -659,27 +680,30 @@ void NetworkManager::LoadConfigFromINI() {
     uint32_t tagsLoaded = 0;
     uint32_t sellSet = 0;
 
+    // Clear and rebuild presets and container lists each load
+    m_presets.clear();
+    m_containerLists.clear();
+
     // Collect matching files, sorted alphabetically
     std::vector<std::filesystem::path> iniFiles;
     std::error_code ec;
     for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
         if (!entry.is_regular_file()) continue;
-        auto filename = entry.path().filename().string();
+        std::string filename;
+        try { filename = entry.path().filename().string(); }
+        catch (const std::system_error&) { continue; }  // skip non-ANSI filenames
         if (filename.size() < 9) continue;
         auto lower = filename;
         std::transform(lower.begin(), lower.end(), lower.begin(),
             [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         if (lower.find("slid_") == std::string::npos || lower.substr(lower.size() - 4) != ".ini") continue;
-        if (lower == "slid_modauthorexport.ini") {
-            logger::debug("NetworkManager: skipping export file '{}'", filename);
-            continue;
-        }
         iniFiles.push_back(entry.path());
     }
     std::sort(iniFiles.begin(), iniFiles.end());
 
     for (const auto& f : iniFiles) {
-        logger::info("NetworkManager: scanning '{}'", f.filename().string());
+        try { logger::info("NetworkManager: scanning '{}'", f.filename().string()); }
+        catch (const std::system_error&) {}
     }
 
     for (const auto& filePath : iniFiles) {
@@ -689,6 +713,10 @@ void NetworkManager::LoadConfigFromINI() {
         std::string line;
         std::string currentSection;
         std::string currentNetworkName;
+        std::string currentPresetName;
+        std::string currentPresetSub;  // "", "Filters", "Tags", "Whoosh"
+        std::string currentContainerListName;
+        std::string currentContainerListSub;  // "", "Containers"
 
         while (std::getline(file, line)) {
             // Strip comments
@@ -712,6 +740,10 @@ void NetworkManager::LoadConfigFromINI() {
 
                 currentSection = section;
                 currentNetworkName.clear();
+                currentPresetName.clear();
+                currentPresetSub.clear();
+                currentContainerListName.clear();
+                currentContainerListSub.clear();
 
                 // Check for [Network:Name]
                 if (section.size() > 8 && section.substr(0, 8) == "Network:") {
@@ -720,6 +752,53 @@ void NetworkManager::LoadConfigFromINI() {
                     auto ns = currentNetworkName.find_first_not_of(" \t");
                     auto ne = currentNetworkName.find_last_not_of(" \t");
                     currentNetworkName = (ns != std::string::npos) ? currentNetworkName.substr(ns, ne - ns + 1) : "";
+                }
+                // Check for [ContainerList:Name] or [ContainerList:Name:Containers]
+                else if (section.size() > 14 && section.substr(0, 14) == "ContainerList:") {
+                    auto rest = section.substr(14);
+                    auto rs = rest.find_first_not_of(" \t");
+                    auto re2 = rest.find_last_not_of(" \t");
+                    rest = (rs != std::string::npos) ? rest.substr(rs, re2 - rs + 1) : "";
+
+                    auto colon = rest.find(':');
+                    if (colon != std::string::npos) {
+                        currentContainerListName = rest.substr(0, colon);
+                        currentContainerListSub = rest.substr(colon + 1);
+                        auto ps = currentContainerListName.find_first_not_of(" \t");
+                        auto pe = currentContainerListName.find_last_not_of(" \t");
+                        currentContainerListName = (ps != std::string::npos) ? currentContainerListName.substr(ps, pe - ps + 1) : "";
+                        auto ss2 = currentContainerListSub.find_first_not_of(" \t");
+                        auto se2 = currentContainerListSub.find_last_not_of(" \t");
+                        currentContainerListSub = (ss2 != std::string::npos) ? currentContainerListSub.substr(ss2, se2 - ss2 + 1) : "";
+                    } else {
+                        currentContainerListName = rest;
+                        currentContainerListSub.clear();
+                    }
+                }
+                // Check for [Preset:Name] or [Preset:Name:Sub]
+                else if (section.size() > 7 && section.substr(0, 7) == "Preset:") {
+                    auto rest = section.substr(7);
+                    // Trim
+                    auto rs = rest.find_first_not_of(" \t");
+                    auto re2 = rest.find_last_not_of(" \t");
+                    rest = (rs != std::string::npos) ? rest.substr(rs, re2 - rs + 1) : "";
+
+                    // Check for sub-section (Preset:Name:Filters, Preset:Name:Tags, Preset:Name:Whoosh)
+                    auto colon = rest.find(':');
+                    if (colon != std::string::npos) {
+                        currentPresetName = rest.substr(0, colon);
+                        currentPresetSub = rest.substr(colon + 1);
+                        // Trim both
+                        auto ps = currentPresetName.find_first_not_of(" \t");
+                        auto pe = currentPresetName.find_last_not_of(" \t");
+                        currentPresetName = (ps != std::string::npos) ? currentPresetName.substr(ps, pe - ps + 1) : "";
+                        auto ss2 = currentPresetSub.find_first_not_of(" \t");
+                        auto se2 = currentPresetSub.find_last_not_of(" \t");
+                        currentPresetSub = (ss2 != std::string::npos) ? currentPresetSub.substr(ss2, se2 - ss2 + 1) : "";
+                    } else {
+                        currentPresetName = rest;
+                        currentPresetSub.clear();
+                    }
                 }
                 continue;
             }
@@ -736,6 +815,114 @@ void NetworkManager::LoadConfigFromINI() {
             auto vs = value.find_first_not_of(" \t");
             auto ve = value.find_last_not_of(" \t");
             value = (vs != std::string::npos) ? value.substr(vs, ve - vs + 1) : "";
+
+            // [ContainerList:*] sections
+            if (!currentContainerListName.empty()) {
+                // Find or create container list
+                ContainerList* clist = nullptr;
+                for (auto& cl : m_containerLists) {
+                    if (cl.name == currentContainerListName) {
+                        clist = &cl;
+                        break;
+                    }
+                }
+                if (!clist) {
+                    m_containerLists.emplace_back();
+                    clist = &m_containerLists.back();
+                    clist->name = currentContainerListName;
+                }
+
+                if (currentContainerListSub.empty()) {
+                    // Root section: RequirePlugin, Description
+                    if (key == "RequirePlugin") {
+                        clist->requirePlugins.push_back(value);
+                    } else if (key == "Description") {
+                        clist->description = value;
+                    }
+                } else if (currentContainerListSub == "Containers") {
+                    // key = containerRef, value = displayName
+                    ContainerListEntry entry;
+                    entry.containerRef = key;
+                    entry.displayName = value;
+                    clist->containers.push_back(std::move(entry));
+                }
+                continue;
+            }
+
+            // [Preset:*] sections
+            if (!currentPresetName.empty()) {
+                // Find or create preset
+                NetworkPreset* preset = nullptr;
+                for (auto& p : m_presets) {
+                    if (p.name == currentPresetName) {
+                        preset = &p;
+                        break;
+                    }
+                }
+                if (!preset) {
+                    m_presets.emplace_back();
+                    preset = &m_presets.back();
+                    preset->name = currentPresetName;
+                }
+
+                if (currentPresetSub.empty()) {
+                    // Root section: RequirePlugin, Master, Description, UserGenerated, Notice, WarnIfPlugin
+                    if (key == "RequirePlugin") {
+                        preset->requirePlugins.push_back(value);
+                    } else if (key == "Master") {
+                        preset->masterRef = value;
+                    } else if (key == "Description") {
+                        preset->description = value;
+                    } else if (key == "UserGenerated") {
+                        auto vl = value;
+                        std::transform(vl.begin(), vl.end(), vl.begin(),
+                            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                        preset->userGenerated = (vl == "true");
+                    } else if (key == "Notice") {
+                        preset->warnings.push_back(PresetWarning{"", value});
+                    } else if (key == "WarnIfPlugin") {
+                        auto pipe = value.find('|');
+                        if (pipe != std::string::npos) {
+                            auto plugin = value.substr(0, pipe);
+                            auto msg = value.substr(pipe + 1);
+                            // Trim both
+                            auto ps2 = plugin.find_first_not_of(" \t");
+                            auto pe2 = plugin.find_last_not_of(" \t");
+                            plugin = (ps2 != std::string::npos) ? plugin.substr(ps2, pe2 - ps2 + 1) : "";
+                            auto ms2 = msg.find_first_not_of(" \t");
+                            auto me2 = msg.find_last_not_of(" \t");
+                            msg = (ms2 != std::string::npos) ? msg.substr(ms2, me2 - ms2 + 1) : "";
+                            preset->warnings.push_back(PresetWarning{plugin, msg});
+                        }
+                    }
+                } else if (currentPresetSub == "Filters") {
+                    // key = filterID, value = containerRef or "CatchAll = ref"
+                    if (key == "CatchAll") {
+                        preset->catchAllRef = value;
+                    } else {
+                        PresetFilterStage stage;
+                        stage.filterID = key;
+                        stage.containerRef = value;
+                        preset->filters.push_back(std::move(stage));
+                    }
+                } else if (currentPresetSub == "Tags") {
+                    // key = containerRef, value = display name
+                    PresetTag tag;
+                    tag.containerRef = key;
+                    tag.displayName = value;
+                    preset->tags.push_back(std::move(tag));
+                } else if (currentPresetSub == "Whoosh") {
+                    // key = filterID, value = true/false
+                    auto valueLower = value;
+                    std::transform(valueLower.begin(), valueLower.end(), valueLower.begin(),
+                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                    if (valueLower == "true") {
+                        preset->whooshFilters.insert(key);
+                        preset->whooshConfigured = true;
+                    }
+                }
+                continue;
+            }
 
             // [Network:Name] section - look for Master =
             if (!currentNetworkName.empty() && key == "Master") {
@@ -808,6 +995,112 @@ void NetworkManager::LoadConfigFromINI() {
         logger::info("NetworkManager::LoadConfigFromINI: {} networks, {} tags, {} sell container",
                      networksCreated, tagsLoaded, sellSet);
     }
+
+    // Resolve preset FormIDs and prune invalid presets
+    uint32_t presetsLoaded = 0;
+    for (auto it = m_presets.begin(); it != m_presets.end();) {
+        auto& preset = *it;
+
+        // Check RequirePlugin(s) — all must be loaded
+        {
+            bool missingPlugin = false;
+            for (const auto& plugin : preset.requirePlugins) {
+                if (!dh->LookupModByName(plugin)) {
+                    logger::debug("Preset '{}': RequirePlugin '{}' not loaded, skipping",
+                                 preset.name, plugin);
+                    missingPlugin = true;
+                    break;
+                }
+            }
+            if (missingPlugin) {
+                it = m_presets.erase(it);
+                continue;
+            }
+        }
+
+        // Resolve master
+        if (preset.masterRef.empty()) {
+            logger::warn("Preset '{}': no Master defined, skipping", preset.name);
+            it = m_presets.erase(it);
+            continue;
+        }
+
+        preset.resolvedMasterFormID = ParseFormIDRef(preset.masterRef, dh);
+        if (preset.resolvedMasterFormID == 0) {
+            logger::warn("Preset '{}': failed to resolve Master '{}', skipping",
+                         preset.name, preset.masterRef);
+            it = m_presets.erase(it);
+            continue;
+        }
+
+        logger::info("Preset '{}': master={:08X}, {} filters, {} tags, {} whoosh, {} warnings",
+                     preset.name, preset.resolvedMasterFormID,
+                     preset.filters.size(), preset.tags.size(),
+                     preset.whooshFilters.size(), preset.warnings.size());
+        ++presetsLoaded;
+        ++it;
+    }
+
+    if (presetsLoaded > 0) {
+        logger::info("NetworkManager::LoadConfigFromINI: {} presets loaded", presetsLoaded);
+    }
+
+    // Resolve container list FormIDs and prune invalid lists
+    uint32_t containerListsLoaded = 0;
+    for (auto clIt = m_containerLists.begin(); clIt != m_containerLists.end();) {
+        auto& clist = *clIt;
+
+        // Check RequirePlugin(s)
+        {
+            bool missingPlugin = false;
+            for (const auto& plugin : clist.requirePlugins) {
+                if (!dh->LookupModByName(plugin)) {
+                    logger::debug("ContainerList '{}': RequirePlugin '{}' not loaded, skipping",
+                                 clist.name, plugin);
+                    missingPlugin = true;
+                    break;
+                }
+            }
+            if (missingPlugin) {
+                clIt = m_containerLists.erase(clIt);
+                continue;
+            }
+        }
+
+        // Resolve container entries — prune entries that fail
+        for (auto entryIt = clist.containers.begin(); entryIt != clist.containers.end();) {
+            entryIt->resolvedFormID = ParseFormIDRef(entryIt->containerRef, dh);
+            if (entryIt->resolvedFormID == 0) {
+                logger::warn("ContainerList '{}': failed to resolve '{}'",
+                            clist.name, entryIt->containerRef);
+                entryIt = clist.containers.erase(entryIt);
+            } else {
+                ++entryIt;
+            }
+        }
+
+        // Prune entire list if no containers resolved
+        if (clist.containers.empty()) {
+            logger::warn("ContainerList '{}': no valid containers, removing", clist.name);
+            clIt = m_containerLists.erase(clIt);
+            continue;
+        }
+
+        logger::info("ContainerList '{}': {} containers", clist.name, clist.containers.size());
+        ++containerListsLoaded;
+        ++clIt;
+    }
+
+    if (containerListsLoaded > 0) {
+        logger::info("NetworkManager::LoadConfigFromINI: {} container lists loaded", containerListsLoaded);
+    }
+}
+
+void NetworkManager::ReloadPresets() {
+    // Re-scan all INI files — LoadConfigFromINI clears m_presets first,
+    // and guards against duplicating existing networks/tags/sell state.
+    LoadConfigFromINI();
+    logger::info("ReloadPresets: {} presets after reload", m_presets.size());
 }
 
 void NetworkManager::DumpToLog() const {
@@ -845,7 +1138,208 @@ void NetworkManager::DumpToLog() const {
                  m_sellState.timerStarted, m_sellState.lastSellTime);
     logger::info("Transaction log: {} entries", m_transactionLog.size());
 
+    logger::info("Presets: {} loaded", m_presets.size());
+    for (const auto& p : m_presets) {
+        bool active = false;
+        for (const auto& net : m_networks) {
+            if (net.name == p.name) { active = true; break; }
+        }
+        logger::info("  Preset '{}' master={:08X} filters={} tags={} whoosh={} active={}",
+                     p.name, p.resolvedMasterFormID, p.filters.size(),
+                     p.tags.size(), p.whooshFilters.size(), active);
+    }
+
     logger::info("=== End Dump ===");
+}
+
+// --- Presets ---
+
+const std::vector<NetworkPreset>& NetworkManager::GetPresets() const {
+    return m_presets;
+}
+
+size_t NetworkManager::GetPresetCount() const {
+    return m_presets.size();
+}
+
+const NetworkPreset* NetworkManager::FindPresetByName(const std::string& a_name) const {
+    for (const auto& p : m_presets) {
+        if (p.name == a_name) return &p;
+    }
+    return nullptr;
+}
+
+const std::vector<ContainerList>& NetworkManager::GetContainerLists() const {
+    return m_containerLists;
+}
+
+size_t NetworkManager::GetContainerListCount() const {
+    return m_containerLists.size();
+}
+
+const ContainerList* NetworkManager::FindContainerListByName(const std::string& a_name) const {
+    for (const auto& cl : m_containerLists) {
+        if (cl.name == a_name) return &cl;
+    }
+    return nullptr;
+}
+
+bool NetworkManager::IsContainerListEnabled(const std::string& a_name) const {
+    std::lock_guard lock(m_lock);
+    return m_disabledContainerLists.find(a_name) == m_disabledContainerLists.end();
+}
+
+void NetworkManager::SetContainerListEnabled(const std::string& a_name, bool a_enabled) {
+    std::lock_guard lock(m_lock);
+    if (a_enabled) {
+        m_disabledContainerLists.erase(a_name);
+        logger::info("SetContainerListEnabled: enabled '{}'", a_name);
+    } else {
+        m_disabledContainerLists.insert(a_name);
+        logger::info("SetContainerListEnabled: disabled '{}'", a_name);
+    }
+}
+
+bool NetworkManager::ActivatePreset(const std::string& a_name) {
+    const NetworkPreset* preset = FindPresetByName(a_name);
+    if (!preset) {
+        logger::warn("ActivatePreset: preset '{}' not found", a_name);
+        return false;
+    }
+
+    if (preset->resolvedMasterFormID == 0) {
+        logger::warn("ActivatePreset: preset '{}' has no resolved master", a_name);
+        return false;
+    }
+
+    // Check no existing network with same name or same master
+    {
+        std::lock_guard lock(m_lock);
+        for (const auto& net : m_networks) {
+            if (net.name == a_name) {
+                logger::warn("ActivatePreset: network '{}' already exists", a_name);
+                return false;
+            }
+            if (net.masterFormID == preset->resolvedMasterFormID) {
+                logger::warn("ActivatePreset: master {:08X} already used by network '{}'",
+                             preset->resolvedMasterFormID, net.name);
+                return false;
+            }
+        }
+    }
+
+    // Create network
+    if (!CreateNetwork(a_name, preset->resolvedMasterFormID)) {
+        logger::error("ActivatePreset: CreateNetwork failed for '{}'", a_name);
+        return false;
+    }
+
+    auto* dh = RE::TESDataHandler::GetSingleton();
+    if (!dh) {
+        logger::error("ActivatePreset: TESDataHandler not available");
+        return false;
+    }
+
+    // Build filter stages
+    // "Keep" = master FormID (items stay in master container)
+    // "Pass" = FormID 0 (filter skipped, items fall through to next)
+    std::vector<FilterStage> filters;
+    for (const auto& pf : preset->filters) {
+        FilterStage stage;
+        stage.filterID = pf.filterID;
+        std::string refLower = pf.containerRef;
+        std::transform(refLower.begin(), refLower.end(), refLower.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (refLower == "keep") {
+            stage.containerFormID = preset->resolvedMasterFormID;
+            logger::debug("ActivatePreset '{}': filter '{}' = Keep (master {:08X})",
+                         a_name, pf.filterID, stage.containerFormID);
+        } else if (refLower == "pass") {
+            stage.containerFormID = 0;
+            logger::debug("ActivatePreset '{}': filter '{}' = Pass", a_name, pf.filterID);
+        } else {
+            stage.containerFormID = ParseFormIDRef(pf.containerRef, dh);
+            if (stage.containerFormID != 0) {
+                logger::debug("ActivatePreset '{}': filter '{}' = {:08X} ({})",
+                             a_name, pf.filterID, stage.containerFormID, pf.containerRef);
+            } else {
+                logger::warn("ActivatePreset '{}': filter '{}' failed to resolve '{}'",
+                            a_name, pf.filterID, pf.containerRef);
+            }
+        }
+        filters.push_back(std::move(stage));
+    }
+
+    // Resolve catch-all (Keep = 0 = master, same as default)
+    RE::FormID catchAllFormID = 0;
+    if (!preset->catchAllRef.empty()) {
+        std::string catchLower = preset->catchAllRef;
+        std::transform(catchLower.begin(), catchLower.end(), catchLower.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (catchLower != "keep") {
+            catchAllFormID = ParseFormIDRef(preset->catchAllRef, dh);
+        }
+    }
+
+    SetFilterConfig(a_name, filters, catchAllFormID);
+
+    // Tag containers
+    uint32_t tagged = 0;
+    for (const auto& tag : preset->tags) {
+        auto fid = ParseFormIDRef(tag.containerRef, dh);
+        if (fid != 0 && !IsTagged(fid)) {
+            TagContainer(fid, tag.displayName);
+            ++tagged;
+            logger::debug("ActivatePreset '{}': tagged {:08X} as '{}'", a_name, fid, tag.displayName);
+        } else if (fid == 0) {
+            logger::warn("ActivatePreset '{}': failed to resolve tag '{}'", a_name, tag.containerRef);
+        }
+    }
+
+    // Set whoosh config
+    if (preset->whooshConfigured) {
+        SetWhooshConfig(a_name, preset->whooshFilters);
+    }
+
+    logger::info("ActivatePreset: activated '{}' with {} filters, {} tags",
+                 a_name, filters.size(), preset->tags.size());
+    return true;
+}
+
+std::string NetworkManager::GetPresetWarnings(const std::string& a_name) const {
+    const auto* preset = FindPresetByName(a_name);
+    if (!preset || preset->warnings.empty()) {
+        logger::debug("GetPresetWarnings '{}': no warnings defined", a_name);
+        return "";
+    }
+
+    logger::debug("GetPresetWarnings '{}': evaluating {} warning(s)", a_name, preset->warnings.size());
+    auto* dh = RE::TESDataHandler::GetSingleton();
+    std::string result;
+    for (const auto& w : preset->warnings) {
+        if (w.plugin.empty()) {
+            // Unconditional
+            if (!result.empty()) result += "\n\n";
+            result += w.message;
+            logger::debug("GetPresetWarnings '{}': unconditional notice added", a_name);
+        } else if (dh && dh->LookupModByName(w.plugin)) {
+            // Conditional — plugin is loaded
+            if (!result.empty()) result += "\n\n";
+            result += w.message;
+            logger::debug("GetPresetWarnings '{}': plugin '{}' found, warning added", a_name, w.plugin);
+        } else {
+            logger::debug("GetPresetWarnings '{}': plugin '{}' not loaded, skipping", a_name, w.plugin);
+        }
+    }
+
+    // Replace literal \n sequences with actual newlines
+    std::string::size_type pos = 0;
+    while ((pos = result.find("\\n", pos)) != std::string::npos) {
+        result.replace(pos, 2, "\n");
+        ++pos;
+    }
+
+    return result;
 }
 
 // --- Private helpers ---
@@ -1088,4 +1582,27 @@ void NetworkManager::LoadTransactionLog(SKSE::SerializationInterface* a_intfc, u
     }
 
     logger::info("Loaded {} transaction log entries from cosave", m_transactionLog.size());
+}
+
+void NetworkManager::LoadContainerListState(SKSE::SerializationInterface* a_intfc, uint32_t a_version) {
+    if (a_version > kClstVersion) {
+        logger::warn("CLST cosave version {} is newer than supported {}, skipping",
+                     a_version, kClstVersion);
+        return;
+    }
+
+    m_disabledContainerLists.clear();
+
+    uint32_t count = 0;
+    a_intfc->ReadRecordData(&count, sizeof(count));
+
+    for (uint32_t i = 0; i < count; ++i) {
+        uint16_t nameLen = 0;
+        a_intfc->ReadRecordData(&nameLen, sizeof(nameLen));
+        std::string name(nameLen, '\0');
+        a_intfc->ReadRecordData(name.data(), nameLen);
+        m_disabledContainerLists.insert(std::move(name));
+    }
+
+    logger::info("Loaded {} disabled container lists from cosave", m_disabledContainerLists.size());
 }

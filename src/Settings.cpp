@@ -85,6 +85,12 @@ namespace Settings {
         return dir / "SLID.ini";
     }
 
+    std::filesystem::path GetDataDir() {
+        auto ini = GetINIPath();
+        if (ini.empty()) return {};
+        return ini.parent_path() / "SLID";
+    }
+
     // --- Load ---
 
     void Load() {
@@ -199,13 +205,12 @@ namespace Settings {
     // Entries with a group also go into uniqueItemGroups[group] (child filter).
 
     void LoadUniqueItems() {
-        auto iniPath = GetINIPath();
-        if (iniPath.empty()) {
-            logger::warn("Settings::LoadUniqueItems: could not determine INI path");
+        auto dir = GetDataDir();
+        if (dir.empty()) {
+            logger::warn("Settings::LoadUniqueItems: could not determine data dir");
             return;
         }
 
-        auto dir = iniPath.parent_path();
         auto* dh = RE::TESDataHandler::GetSingleton();
         if (!dh) {
             logger::error("Settings::LoadUniqueItems: TESDataHandler not available");
@@ -220,15 +225,15 @@ namespace Settings {
         std::error_code ec;
         for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
             if (!entry.is_regular_file()) continue;
-            auto filename = entry.path().filename().string();
+            std::string filename;
+            try { filename = entry.path().filename().string(); }
+            catch (const std::system_error&) { continue; }  // skip non-ANSI filenames
             // Must start with "SLID_" and end with ".ini" (case-insensitive)
             if (filename.size() < 9) continue;  // "SLID_X.ini" minimum
             auto lower = filename;
             std::transform(lower.begin(), lower.end(), lower.begin(),
                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             if (lower.substr(0, 5) != "slid_" || lower.substr(lower.size() - 4) != ".ini") continue;
-            // Skip mod author export file — it's meant to be renamed and shipped, not loaded as-is
-            if (lower == "slid_modauthorexport.ini") continue;
 
             logger::info("Settings: loading unique items from {}", filename);
             ++fileCount;

@@ -168,11 +168,12 @@ namespace TagInputMenu {
         RE::BSEventNotifyControl ProcessEvent(RE::InputEvent* const* a_event,
                                                RE::BSTEventSource<RE::InputEvent*>* a_source) override;
 
+        static bool s_shiftHeld;
+        static bool s_ctrlHeld;
+
     private:
         InputHandler() = default;
         InputHandler(const InputHandler&) = delete;
         InputHandler& operator=(const InputHandler&) = delete;
-
-        static bool s_shiftHeld;
     };
 }

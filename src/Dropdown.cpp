@@ -569,54 +569,69 @@ void Dropdown::PopulateRows() {
 
             auto& entry = m_entries[dataIdx];
 
-            // Build display text — mark committed selection with "> " prefix
-            bool isCommitted = (!m_selectedId.empty() && entry.id == m_selectedId);
-            std::string displayText = isCommitted ? "> " + entry.label : entry.label;
-            int labelLen = static_cast<int>(displayText.length());
-            if (!entry.sublabel.empty()) {
-                displayText += " (" + entry.sublabel + ")";
-            }
+            // Detect sub-group header entries (injected by BuildPickerList)
+            bool isHeader = (entry.id.empty() && !entry.subGroup.empty());
 
             std::string rowName = "_ddRow" + std::to_string(i);
             std::string textPath = "_root." + rowName + "._text";
 
-            RE::GFxValue textVal;
-            textVal.SetString(displayText.c_str());
-            m_movie->SetVariable((textPath + ".text").c_str(), textVal);
+            if (isHeader) {
+                // Header row: smaller font, dimmer color, no prefix/sublabel, flat background
+                RE::GFxValue textVal;
+                textVal.SetString(entry.label.c_str());
+                m_movie->SetVariable((textPath + ".text").c_str(), textVal);
 
-            // Text color
-            uint32_t textColor = entry.enabled ? entry.color : COLOR_DISABLED;
-            ScaleformUtil::SetTextFieldFormat(m_movie, textPath, 14, textColor);
+                static constexpr uint32_t COLOR_HEADER = 0x999999;
+                ScaleformUtil::SetTextFieldFormat(m_movie, textPath, 12, COLOR_HEADER);
 
-            // Dim sublabel
-            if (!entry.sublabel.empty() && entry.enabled) {
-                RE::GFxValue tf;
-                m_movie->GetVariable(&tf, textPath.c_str());
-                if (!tf.IsUndefined()) {
-                    RE::GFxValue dimFmt;
-                    m_movie->CreateObject(&dimFmt, "TextFormat");
-                    if (!dimFmt.IsUndefined()) {
-                        RE::GFxValue colorVal;
-                        colorVal.SetNumber(static_cast<double>(COLOR_SUBLABEL));
-                        dimFmt.SetMember("color", colorVal);
+                DrawRowBackground(i, COLOR_ROW_NORM, ALPHA_ROW_NORM);
+            } else {
+                // Build display text — mark committed selection with "> " prefix
+                bool isCommitted = (!m_selectedId.empty() && entry.id == m_selectedId);
+                std::string displayText = isCommitted ? "> " + entry.label : entry.label;
+                int labelLen = static_cast<int>(displayText.length());
+                if (!entry.sublabel.empty()) {
+                    displayText += " (" + entry.sublabel + ")";
+                }
 
-                        RE::GFxValue fmtArgs[3];
-                        fmtArgs[0].SetNumber(static_cast<double>(labelLen));
-                        fmtArgs[1].SetNumber(static_cast<double>(displayText.length()));
-                        fmtArgs[2] = dimFmt;
-                        tf.Invoke("setTextFormat", nullptr, fmtArgs, 3);
+                RE::GFxValue textVal;
+                textVal.SetString(displayText.c_str());
+                m_movie->SetVariable((textPath + ".text").c_str(), textVal);
+
+                // Text color
+                uint32_t textColor = entry.enabled ? entry.color : COLOR_DISABLED;
+                ScaleformUtil::SetTextFieldFormat(m_movie, textPath, 14, textColor);
+
+                // Dim sublabel
+                if (!entry.sublabel.empty() && entry.enabled) {
+                    RE::GFxValue tf;
+                    m_movie->GetVariable(&tf, textPath.c_str());
+                    if (!tf.IsUndefined()) {
+                        RE::GFxValue dimFmt;
+                        m_movie->CreateObject(&dimFmt, "TextFormat");
+                        if (!dimFmt.IsUndefined()) {
+                            RE::GFxValue colorVal;
+                            colorVal.SetNumber(static_cast<double>(COLOR_SUBLABEL));
+                            dimFmt.SetMember("color", colorVal);
+
+                            RE::GFxValue fmtArgs[3];
+                            fmtArgs[0].SetNumber(static_cast<double>(labelLen));
+                            fmtArgs[1].SetNumber(static_cast<double>(displayText.length()));
+                            fmtArgs[2] = dimFmt;
+                            tf.Invoke("setTextFormat", nullptr, fmtArgs, 3);
+                        }
                     }
                 }
-            }
 
-            // Row background
-            bool isSelected = (dataIdx == m_cursorIndex);
-            bool isHovered = (dataIdx == m_hoverIndex && dataIdx != m_cursorIndex);
-            uint32_t bgColor = isSelected ? COLOR_ROW_SEL :
-                              (isHovered ? COLOR_ROW_HOV : COLOR_ROW_NORM);
-            int bgAlpha = isSelected ? ALPHA_ROW_SEL :
-                         (isHovered ? ALPHA_ROW_HOV : ALPHA_ROW_NORM);
-            DrawRowBackground(i, bgColor, bgAlpha);
+                // Row background
+                bool isSelected = (dataIdx == m_cursorIndex);
+                bool isHovered = (dataIdx == m_hoverIndex && dataIdx != m_cursorIndex);
+                uint32_t bgColor = isSelected ? COLOR_ROW_SEL :
+                                  (isHovered ? COLOR_ROW_HOV : COLOR_ROW_NORM);
+                int bgAlpha = isSelected ? ALPHA_ROW_SEL :
+                             (isHovered ? ALPHA_ROW_HOV : ALPHA_ROW_NORM);
+                DrawRowBackground(i, bgColor, bgAlpha);
+            }
 
             // Group separator — thin line between rows with different groups
             {

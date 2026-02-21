@@ -13,6 +13,8 @@ Intelligent storage management for Skyrim SE/AE. Create storage networks that au
 - **LOTD integration** - Museum-needed items filter to a dedicated container (requires TCC)
 - **SCIE integration** - Link containers work as crafting sources, SCIE containers can join Links
 - **Follower storage** - [NFF](https://www.nexusmods.com/skyrimspecialedition/mods/55653) and [KWF](https://www.nexusmods.com/skyrimspecialedition/mods/2227) follower containers appear in the picker (auto-detected)
+- **Link Presets** - Import ready-made Links from INI files. Ships with [Eli's Breezehome](https://www.nexusmods.com/skyrimspecialedition/mods/2829) preset. Mod authors can create presets for any player home
+- **Container Lists** - Access containers from other cells in the picker. Ships with [LOTD](https://www.nexusmods.com/skyrimspecialedition/mods/11802) Safehouse (23 containers) and [General Stores](https://www.nexusmods.com/skyrimspecialedition/mods/4322) (27 containers). Enable/disable per list in MCM
 - **Custom config menu** - Scaleform UI with drag-to-reorder filter priority
 - **SkyUI MCM** - 7 configuration pages for settings, sales, compatibility, and maintenance
 - **13 languages** - English plus 12 translations in optional Babel package
@@ -93,9 +95,10 @@ Output: `build/release/Release/SLID.dll`
 
 ## For Mod Authors
 
-SLID supports custom filters and vendor whitelists via INI files. See [docs/ModAuthorGuide.md](docs/ModAuthorGuide.md) for:
+SLID supports custom filters, presets, container lists, and vendor whitelists via INI files. See [docs/ModAuthorGuide.md](docs/ModAuthorGuide.md) for:
 
 - Trait reference for filter definitions
+- Preset and container list authoring
 - INI file format and naming conventions
 - Plugin API for SKSE messaging integration
 
@@ -108,6 +111,18 @@ Description = Items added by Your Mod
 RequireTrait = formlist:YourMod.esp|0x123ABC
 Parent = misc
 WhooshDefault = true
+```
+
+Example container list:
+
+```ini
+[ContainerList:My Storage]
+RequirePlugin = MyMod.esp
+Description = Storage containers from My Mod
+
+[ContainerList:My Storage:Containers]
+MyMod.esp|0xABC = Weapon Chest
+MyMod.esp|0xDEF = Armor Chest
 ```
 
 ## Documentation

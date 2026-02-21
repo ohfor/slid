@@ -87,6 +87,31 @@ string[] Function GetNetworkContainerNames(string asNetworkName) global native
 Function RemoveContainerFromNetwork(string asNetworkName, int aiIndex) global native
 
 ; =============================================================================
+; MCM Presets
+; =============================================================================
+
+int Function GetPresetCount() global native
+string[] Function GetPresetNames() global native
+string Function GetPresetStatus(string asName) global native
+string Function GetPresetWarnings(string asName) global native
+bool Function ActivatePreset(string asName) global native
+string Function GetPresetMasterConflict(string asName) global native
+Function ReloadPresets() global native
+
+string Function GetPresetDescription(string asName) global native
+bool Function IsPresetUserGenerated(string asName) global native
+
+; =============================================================================
+; MCM Containerlists
+; =============================================================================
+
+int Function GetContainerListCount() global native
+string[] Function GetContainerListNames() global native
+string Function GetContainerListDescription(string asName) global native
+bool Function IsContainerListEnabled(string asName) global native
+Function SetContainerListEnabled(string asName, bool abEnabled) global native
+
+; =============================================================================
 ; MCM Compatibility
 ; =============================================================================
 
@@ -117,10 +142,11 @@ string Function GetVendorLastVisit(int aiIndex) global native
 string Function GetPluginVersion() global native
 
 ; =============================================================================
-; MCM Mod Author / Debug
+; MCM Presets / Debug
 ; =============================================================================
 
-bool Function GenerateModAuthorExport(bool abNetworks, bool abFilters, bool abVendors) global native
+bool Function GeneratePresetINI(string asNetworkName, string asPresetName) global native
+Function BeginGeneratePreset(string asNetworkName) global native
 Function DumpContainers() global native
 Function DumpFilters() global native
 Function DumpVendors() global native

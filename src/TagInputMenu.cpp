@@ -17,6 +17,7 @@ namespace TagInputMenu {
     int         Menu::s_selEnd = 0;
     bool        Menu::s_allSelected = false;
     bool        InputHandler::s_shiftHeld = false;
+    bool        InputHandler::s_ctrlHeld  = false;
 
     static Menu* g_activeMenu = nullptr;
 
@@ -856,6 +857,7 @@ namespace TagInputMenu {
     void Menu::HandleChar(std::uint32_t a_charCode) {
         if (!g_activeMenu || !g_activeMenu->uiMovie) return;
         if (a_charCode < 32 || a_charCode == 127) return;
+        if (InputHandler::s_ctrlHeld) return;  // Ctrl+key combos handled separately
 
         // If all selected or has selection, delete selection first
         if (HasSelection() || s_allSelected) {
@@ -1173,13 +1175,20 @@ namespace TagInputMenu {
                 continue;
             }
 
-            // Track shift key state
+            // Track modifier key state
             if (device == RE::INPUT_DEVICE::kKeyboard) {
                 if (key == RE::BSKeyboardDevice::Key::kLeftShift ||
                     key == RE::BSKeyboardDevice::Key::kRightShift)
                 {
                     s_shiftHeld = button->IsDown() || button->IsPressed();
                     if (button->IsUp()) s_shiftHeld = false;
+                    continue;
+                }
+                if (key == RE::BSKeyboardDevice::Key::kLeftControl ||
+                    key == RE::BSKeyboardDevice::Key::kRightControl)
+                {
+                    s_ctrlHeld = button->IsDown() || button->IsPressed();
+                    if (button->IsUp()) s_ctrlHeld = false;
                     continue;
                 }
             }
@@ -1223,11 +1232,9 @@ namespace TagInputMenu {
                         Menu::HandleEnd(s_shiftHeld);
                         break;
                     case RE::BSKeyboardDevice::Key::kA:
-                        // Ctrl+A = select all. But with AllowTextInput(true),
-                        // 'a' arrives as CharEvent. kA ButtonEvent only fires
-                        // when a modifier is held and the char is suppressed.
-                        // So if we get kA as a ButtonEvent, treat as Ctrl+A.
-                        Menu::HandleSelectAll();
+                        if (s_ctrlHeld) {
+                            Menu::HandleSelectAll();
+                        }
                         break;
                     default:
                         break;

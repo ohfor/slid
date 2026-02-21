@@ -7,6 +7,39 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-02-21
+
+### Added
+
+- **INI Network Presets** — Entire Links (master + filter assignments + tags + whoosh config) can be declared in INI files as ready-to-use templates. Import via MCM Presets page
+- **Eli's Breezehome preset** — Pre-configured Link for Elianora's Breezehome Overhaul with 20 containers mapped across all major filter categories (requires `Eli_Breezehome.esp`)
+- **Container Lists** — INI `[ContainerList:*]` sections make named containers from other cells available in the SLID picker for any Link. Mod authors ship container lists alongside presets; SLID resolves FormIDs at load time and prunes when plugins are missing
+- **Container list enable/disable toggles** — Per-save MCM toggles for individual container lists on the Presets page. Disabled lists are excluded from the picker
+- **LOTD Safehouse container list** — 23 verified Safehouse and Quality Armory containers from Legacy of the Dragonborn (requires `LegacyoftheDragonborn.esm`)
+- **General Stores container list** — 27 categorized cloud storage containers from General Stores, accessible from anywhere via the Storage Cistern (requires `GeneralStores.esm`)
+- **Per-preset descriptions** — Presets and container lists support a `Description` field shown in MCM info text on highlight
+- **Per-list section headers in container picker** — Container list entries grouped under their list name (e.g. "LOTD Safehouse", "General Stores") with non-selectable header rows
+- **MCM Presets page** — Four sections: Your Links (per-link export), Your Presets (user-generated), Presets (mod-authored with Import/Unavailable status), and Container Lists (toggles)
+- Importing a preset whose master container is already used by another Link shows a Replace/Cancel dialog
+- Preset activation warnings: notices and conditional warnings shown before import
+- Preset Keep/Pass keywords for mod authors writing INI presets
+
+### Changed
+
+- **Data INI files moved to subfolder** — Filter definitions, unique items, vendor whitelist, and preset INI files now live in `SKSE/Plugins/SLID/` instead of `SKSE/Plugins/`. The main settings file `SLID.ini` and DLL remain in `SKSE/Plugins/`. Users upgrading from v1.1.0 should reinstall the mod (mod managers handle this automatically)
+- `SLID_LOTD.ini` renamed to `SLID_TCC_LOTD_Filter.ini` for clarity (it gates on The Curators Companion, not LOTD itself)
+- **Mod Author MCM page renamed to Presets** — Consolidated preset listing and export onto a single "Presets" page with per-link export rows
+- **"Activate" renamed to "Import"** — Presets are fire-and-forget templates. Importing creates a Link from the template; no ongoing "active" state
+- MCM page order: Presets moved to position 3 (after Link)
+
+### Fixed
+
+- Ctrl+A in text input popup (container naming, Link naming) cleared the text and typed 'a' instead of selecting all
+- MCM Link page container list showed duplicate entries when multiple filters pointed to the same container
+- Crash on startup when other SKSE mods have non-ASCII characters in their INI filenames (e.g., Japanese, Korean, Cyrillic)
+- Config menu hold-to-confirm buttons (Whoosh, Defaults) now respond to left mouse button in addition to gamepad A and Enter
+- MCM closes cleanly before the preset naming popup appears (no more single-frame flash)
+
 ## [1.1.0] - 2026-02-19
 
 ### Added
@@ -70,7 +103,7 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Easier identification than generic "Chest" labels
 
 **SkyUI MCM Integration**
-- 7 configuration pages: Settings, Link, Sales, Compatibility, Maintenance, Mod Author, About
+- 7 configuration pages: Settings, Link, Presets, Sales, Compatibility, Maintenance, About
 - All settings persist immediately
 - Vendor details on hover in Sales page
 
@@ -83,5 +116,5 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - 6 lesser powers auto-granted on game load
 - Settings stored in `SKSE/Plugins/SLID.ini`
-- Filter definitions in `SKSE/Plugins/SLID_Filters.ini` (user-extensible)
+- Filter definitions in `SKSE/Plugins/SLID/SLID_Filters.ini` (user-extensible)
 - 13 language translations available (English + 12 others in optional Babel package)

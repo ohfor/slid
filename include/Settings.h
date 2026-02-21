@@ -93,6 +93,9 @@ namespace Settings {
     // Returns the full path to SLID.ini next to the DLL
     std::filesystem::path GetINIPath();
 
+    // Returns the path to the SLID data subfolder (SKSE/Plugins/SLID/)
+    std::filesystem::path GetDataDir();
+
     // Load settings from INI. Call once after logging is initialized.
     void Load();
 

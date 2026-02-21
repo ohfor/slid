@@ -11,10 +11,10 @@ ScriptName SLID_MCM extends SKI_ConfigBase
 ; --- Pages ---
 ; 0: Settings
 ; 1: Link
-; 2: Sales Chest
-; 3: Compatibility
-; 4: Maintenance
-; 5: Mod Author
+; 2: Presets
+; 3: Sales Chest
+; 4: Compatibility
+; 5: Maintenance
 ; 6: About
 
 ; --- Option IDs (reset per page) ---
@@ -48,17 +48,20 @@ int _oidRunSort
 int _oidRunSweep
 int _oidDestroyLink
 
-; Mod Author page - export checkboxes
-int _oidExportNetworks
-int _oidExportFilters
-int _oidExportVendors
-int _oidGenerateExport
-bool _exportNetworks = true
-bool _exportFilters = true
-bool _exportVendors = false
+; Presets page - per-link export
+int[] _oidExportLinks
+string[] _exportLinkNames
 
 ; Compatibility page
 int _oidSCIEIntegration
+
+; Preset tracking
+int[] _oidPresets
+string[] _presetNames
+
+; Containerlist tracking
+int[] _oidContainerLists
+string[] _containerListNames
 
 ; Vendor tracking
 int[] _oidVendors
@@ -89,16 +92,22 @@ function InitializePages()
     Pages = new string[7]
     Pages[0] = "$SLID_PageSettings"
     Pages[1] = "$SLID_PageLink"
-    Pages[2] = "$SLID_PageSalesChest"
-    Pages[3] = "$SLID_PageCompatibility"
-    Pages[4] = "$SLID_PageMaintenance"
-    Pages[5] = "$SLID_PageModAuthor"
+    Pages[2] = "$SLID_PagePresets"
+    Pages[3] = "$SLID_PageSalesChest"
+    Pages[4] = "$SLID_PageCompatibility"
+    Pages[5] = "$SLID_PageMaintenance"
     Pages[6] = "$SLID_PageAbout"
 endFunction
 
 function InitializeArrays()
+    _oidPresets = new int[10]
+    _presetNames = new string[10]
+    _oidContainerLists = new int[10]
+    _containerListNames = new string[10]
     _oidVendors = new int[10]
     _vendorInfoTexts = new string[10]
+    _oidExportLinks = new int[10]
+    _exportLinkNames = new string[10]
 endFunction
 
 ; =============================================================================
@@ -109,8 +118,8 @@ event OnPageReset(string a_page)
     ; Always reinitialize pages to ensure updated keys are used (save may have stale values)
     InitializePages()
 
-    ; Ensure arrays are initialized
-    if (!_oidVendors || _oidVendors.Length != 10)
+    ; Ensure arrays are initialized (covers saves from before preset arrays existed)
+    if (!_oidVendors || _oidVendors.Length != 10 || !_oidPresets || _oidPresets.Length != 10 || !_oidContainerLists || _oidContainerLists.Length != 10 || !_oidExportLinks || _oidExportLinks.Length != 10)
         InitializeArrays()
     endif
 
@@ -126,8 +135,8 @@ event OnPageReset(string a_page)
         RenderCompatibilityPage()
     elseif (a_page == "$SLID_PageMaintenance")
         RenderMaintenancePage()
-    elseif (a_page == "$SLID_PageModAuthor")
-        RenderModAuthorPage()
+    elseif (a_page == "$SLID_PagePresets")
+        RenderPresetsPage()
     elseif (a_page == "$SLID_PageAbout")
         RenderAboutPage()
     else
@@ -158,16 +167,18 @@ function ResetOptionIDs()
     _oidRunSort = -1
     _oidRunSweep = -1
     _oidDestroyLink = -1
-    _oidExportNetworks = -1
-    _oidExportFilters = -1
-    _oidExportVendors = -1
-    _oidGenerateExport = -1
     _oidSCIEIntegration = -1
 
     int i = 0
     while (i < 10)
+        _oidPresets[i] = -1
+        _presetNames[i] = ""
+        _oidContainerLists[i] = -1
+        _containerListNames[i] = ""
         _oidVendors[i] = -1
         _vendorInfoTexts[i] = ""
+        _oidExportLinks[i] = -1
+        _exportLinkNames[i] = ""
         i += 1
     endWhile
 endFunction
@@ -277,7 +288,7 @@ function RenderSalesPage()
             ; Row shows store name with invested indicator
             string valueText = storeName
             if (bonus > 0.0)
-                valueText = storeName + " (Invested)"
+                valueText = storeName + " ($SLID_VendorInvested)"
             endif
 
             ; Info text shows full details
@@ -339,10 +350,10 @@ function RenderCompatibilityPage()
     AddHeaderOption("$SLID_HeaderDetectedMods")
     bool tccInstalled = SLID_Native.IsTCCInstalled()
     if (tccInstalled)
-        AddTextOption("The Curator's Companion", "$SLID_Detected")
+        AddTextOption("$SLID_ModTCC", "$SLID_Detected")
         AddTextOption("$SLID_MuseumFilterAvailable", "", OPTION_FLAG_DISABLED)
     else
-        AddTextOption("The Curator's Companion", "$SLID_NotDetected", OPTION_FLAG_DISABLED)
+        AddTextOption("$SLID_ModTCC", "$SLID_NotDetected", OPTION_FLAG_DISABLED)
     endif
 endFunction
 
@@ -376,22 +387,115 @@ function RenderMaintenancePage()
 endFunction
 
 ; =============================================================================
-; MOD AUTHOR PAGE
+; PRESETS PAGE
 ; =============================================================================
 
-function RenderModAuthorPage()
+function RenderPresetsPage()
     SetCursorFillMode(TOP_TO_BOTTOM)
 
-    AddHeaderOption("$SLID_HeaderExportConfig")
-    _oidExportNetworks = AddToggleOption("$SLID_ExportNetworks", _exportNetworks)
-    _oidExportFilters = AddToggleOption("$SLID_ExportFilters", _exportFilters)
-    _oidExportVendors = AddToggleOption("$SLID_ExportVendors", _exportVendors)
+    ; Fetch network names (used by Your Links section)
+    _networkNames = SLID_Native.GetNetworkNames()
+    int networkCount = _networkNames.Length
 
-    AddEmptyOption()
-    _oidGenerateExport = AddTextOption("$SLID_GenerateExport", "")
+    ; --- Your Links section (export) ---
+    AddHeaderOption("$SLID_HeaderYourLinks")
+    if (networkCount == 0)
+        AddTextOption("$SLID_ExportNoLinks", "", OPTION_FLAG_DISABLED)
+        AddEmptyOption()
+    else
+        int li = 0
+        while (li < networkCount && li < 10)
+            _exportLinkNames[li] = _networkNames[li]
+            _oidExportLinks[li] = AddTextOption("<font color='#AAAAAA'>" + _networkNames[li] + "</font>", "$SLID_Export")
+            li += 1
+        endWhile
+        AddEmptyOption()
+    endif
 
-    AddEmptyOption()
-    AddTextOption("$SLID_ExportNote", "SKSE/Plugins/", OPTION_FLAG_DISABLED)
+    int presetCount = SLID_Native.GetPresetCount()
+    string[] presetNameList
+    if (presetCount > 0)
+        presetNameList = SLID_Native.GetPresetNames()
+    endif
+
+    ; User-generated presets section
+    bool hasUserPresets = false
+    if (presetCount > 0)
+        int uCheck = 0
+        while (uCheck < presetCount && uCheck < 10)
+            if (SLID_Native.IsPresetUserGenerated(presetNameList[uCheck]))
+                hasUserPresets = true
+            endif
+            uCheck += 1
+        endWhile
+    endif
+
+    int presetSlot = 0
+
+    if (hasUserPresets)
+        AddHeaderOption("$SLID_HeaderUserPresets")
+        int upi = 0
+        while (upi < presetCount && upi < 10 && presetSlot < 10)
+            if (SLID_Native.IsPresetUserGenerated(presetNameList[upi]))
+                _presetNames[presetSlot] = presetNameList[upi]
+                string status = SLID_Native.GetPresetStatus(presetNameList[upi])
+                if (status == "Available")
+                    _oidPresets[presetSlot] = AddTextOption("<font color='#999999'>" + presetNameList[upi] + "</font>", "$SLID_Activate")
+                else
+                    _oidPresets[presetSlot] = AddTextOption("<font color='#666666'>" + presetNameList[upi] + "</font>", "$SLID_Unavailable", OPTION_FLAG_DISABLED)
+                endif
+                presetSlot += 1
+            endif
+            upi += 1
+        endWhile
+        AddEmptyOption()
+    endif
+
+    ; Mod-authored presets section
+    bool hasModPresets = false
+    if (presetCount > 0)
+        int mCheck = 0
+        while (mCheck < presetCount && mCheck < 10)
+            if (!SLID_Native.IsPresetUserGenerated(presetNameList[mCheck]))
+                hasModPresets = true
+            endif
+            mCheck += 1
+        endWhile
+    endif
+
+    if (hasModPresets)
+        AddHeaderOption("$SLID_HeaderPresets")
+        int mi = 0
+        while (mi < presetCount && mi < 10 && presetSlot < 10)
+            if (!SLID_Native.IsPresetUserGenerated(presetNameList[mi]))
+                _presetNames[presetSlot] = presetNameList[mi]
+                string status2 = SLID_Native.GetPresetStatus(presetNameList[mi])
+                if (status2 == "Available")
+                    _oidPresets[presetSlot] = AddTextOption("<font color='#999999'>" + presetNameList[mi] + "</font>", "$SLID_Activate")
+                else
+                    _oidPresets[presetSlot] = AddTextOption("<font color='#666666'>" + presetNameList[mi] + "</font>", "$SLID_Unavailable", OPTION_FLAG_DISABLED)
+                endif
+                presetSlot += 1
+            endif
+            mi += 1
+        endWhile
+        AddEmptyOption()
+    endif
+
+    ; Container lists section
+    int clCount = SLID_Native.GetContainerListCount()
+    if (clCount > 0)
+        string[] clNames = SLID_Native.GetContainerListNames()
+        AddHeaderOption("$SLID_HeaderContainerLists")
+        int ci = 0
+        while (ci < clCount && ci < 10)
+            _containerListNames[ci] = clNames[ci]
+            _oidContainerLists[ci] = AddToggleOption(clNames[ci], SLID_Native.IsContainerListEnabled(clNames[ci]))
+            ci += 1
+        endWhile
+        AddEmptyOption()
+    endif
+
 endFunction
 
 ; =============================================================================
@@ -539,34 +643,59 @@ event OnOptionSelect(int a_option)
         return
     endif
 
-    ; Mod Author export toggles
-    if (a_option == _oidExportNetworks)
-        _exportNetworks = !_exportNetworks
-        SetToggleOptionValue(a_option, _exportNetworks)
-        return
-    endif
-
-    if (a_option == _oidExportFilters)
-        _exportFilters = !_exportFilters
-        SetToggleOptionValue(a_option, _exportFilters)
-        return
-    endif
-
-    if (a_option == _oidExportVendors)
-        _exportVendors = !_exportVendors
-        SetToggleOptionValue(a_option, _exportVendors)
-        return
-    endif
-
-    if (a_option == _oidGenerateExport)
-        bool result = SLID_Native.GenerateModAuthorExport(_exportNetworks, _exportFilters, _exportVendors)
-        if (result)
-            ShowMessage("$SLID_ExportGenerated", false)
-        else
-            ShowMessage("$SLID_ExportFailed", false)
+    ; Preset activation
+    int pi2 = 0
+    while (pi2 < 10)
+        if (a_option == _oidPresets[pi2] && _oidPresets[pi2] != -1)
+            string presetName = _presetNames[pi2]
+            ; Check for warnings (plugin conflicts)
+            string warnings = SLID_Native.GetPresetWarnings(presetName)
+            if (warnings != "")
+                if (!ShowMessage(warnings, true))
+                    return  ; User cancelled after seeing warning
+                endif
+            endif
+            ; Check if preset's master is already used by an existing network
+            string conflictNet = SLID_Native.GetPresetMasterConflict(presetName)
+            if (conflictNet != "")
+                if (!ShowMessage("Preset '" + presetName + "' uses the same Master as your '" + conflictNet + "' link. Do you want to replace your current link?", true))
+                    return
+                endif
+                SLID_Native.RemoveNetwork(conflictNet)
+            endif
+            bool activated = SLID_Native.ActivatePreset(presetName)
+            if (activated)
+                ShowMessage("$SLID_PresetActivated", false)
+            else
+                ShowMessage("$SLID_PresetFailed", false)
+            endif
+            ForcePageReset()
+            return
         endif
-        return
-    endif
+        pi2 += 1
+    endWhile
+
+    ; Container list toggles
+    int cli = 0
+    while (cli < 10)
+        if (a_option == _oidContainerLists[cli] && _oidContainerLists[cli] != -1)
+            bool currentVal = SLID_Native.IsContainerListEnabled(_containerListNames[cli])
+            SLID_Native.SetContainerListEnabled(_containerListNames[cli], !currentVal)
+            SetToggleOptionValue(a_option, !currentVal)
+            return
+        endif
+        cli += 1
+    endWhile
+
+    ; Export link — per-row export buttons
+    int eli = 0
+    while (eli < 10)
+        if (a_option == _oidExportLinks[eli] && _oidExportLinks[eli] != -1)
+            SLID_Native.BeginGeneratePreset(_exportLinkNames[eli])
+            return
+        endif
+        eli += 1
+    endWhile
 endEvent
 
 event OnOptionMenuOpen(int a_option)
@@ -583,6 +712,7 @@ event OnOptionMenuOpen(int a_option)
         SetMenuDialogStartIndex(startIdx)
         SetMenuDialogDefaultIndex(0)
     endif
+
 endEvent
 
 event OnOptionMenuAccept(int a_option, int a_index)
@@ -593,6 +723,7 @@ event OnOptionMenuAccept(int a_option, int a_index)
             ForcePageReset()
         endif
     endif
+
 endEvent
 
 event OnOptionSliderOpen(int a_option)
@@ -808,25 +939,45 @@ event OnOptionHighlight(int a_option)
         return
     endif
 
-    if (a_option == _oidExportNetworks)
-        SetInfoText("$SLID_ExportNetworksDesc")
-        return
-    endif
+    ; Export link info
+    int eli2 = 0
+    while (eli2 < 10)
+        if (a_option == _oidExportLinks[eli2] && _oidExportLinks[eli2] != -1)
+            SetInfoText("$SLID_GenerateExportDesc")
+            return
+        endif
+        eli2 += 1
+    endWhile
 
-    if (a_option == _oidExportFilters)
-        SetInfoText("$SLID_ExportFiltersDesc")
-        return
-    endif
+    ; Preset info — per-preset description
+    int pi3 = 0
+    while (pi3 < 10)
+        if (a_option == _oidPresets[pi3] && _oidPresets[pi3] != -1)
+            string desc = SLID_Native.GetPresetDescription(_presetNames[pi3])
+            if (desc != "")
+                SetInfoText(desc)
+            else
+                SetInfoText("$SLID_PresetDesc")
+            endif
+            return
+        endif
+        pi3 += 1
+    endWhile
 
-    if (a_option == _oidExportVendors)
-        SetInfoText("$SLID_ExportVendorsDesc")
-        return
-    endif
-
-    if (a_option == _oidGenerateExport)
-        SetInfoText("$SLID_GenerateExportDesc")
-        return
-    endif
+    ; Containerlist info
+    int ci = 0
+    while (ci < 10)
+        if (a_option == _oidContainerLists[ci] && _oidContainerLists[ci] != -1)
+            string clDesc = SLID_Native.GetContainerListDescription(_containerListNames[ci])
+            if (clDesc != "")
+                SetInfoText(clDesc)
+            else
+                SetInfoText("$SLID_ContainerListDesc")
+            endif
+            return
+        endif
+        ci += 1
+    endWhile
 
     ; Vendor info - plain string (no $ prefix = displayed as-is)
     int i = 0

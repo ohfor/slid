@@ -270,7 +270,7 @@ namespace ActivationHook {
                             thisID, summonNetwork);
 
                 SKSE::GetTaskInterface()->AddTask([summonNetwork, activatorID]() {
-                    UIHelper::ShowMessageBox("Link: " + summonNetwork, {T("$SLID_MsgOpen"), T("$SLID_MsgWhoosh"), T("$SLID_MsgAccessLink"), T("$SLID_MsgDismiss")},
+                    UIHelper::ShowMessageBox(T("$SLID_MsgLinkPrefix") + summonNetwork, {T("$SLID_MsgOpen"), T("$SLID_MsgWhoosh"), T("$SLID_MsgAccessLink"), T("$SLID_MsgDismiss")},
                         [summonNetwork, activatorID](int idx) {
                             if (idx == 0) {
                                 // Open master directly — no gather, no auto-sort
@@ -321,7 +321,7 @@ namespace ActivationHook {
                 logger::info("ActivateRef hook: intercepted sell container {:08X}", thisID);
 
                 SKSE::GetTaskInterface()->AddTask([containerID, activatorID]() {
-                    UIHelper::ShowMessageBox("Link: " + T("$SLID_SellContainer"), {T("$SLID_MsgOpen"), T("$SLID_MsgOverview")},
+                    UIHelper::ShowMessageBox(T("$SLID_MsgLinkPrefix") + T("$SLID_SellContainer"), {T("$SLID_MsgOpen"), T("$SLID_MsgOverview")},
                         [containerID, activatorID](int idx) {
                             if (idx == 0) {
                                 SKSE::GetTaskInterface()->AddTask([containerID, activatorID]() {
@@ -345,7 +345,7 @@ namespace ActivationHook {
                             thisID, networkName);
 
                 SKSE::GetTaskInterface()->AddTask([networkName, containerID, activatorID]() {
-                    UIHelper::ShowMessageBox("Link: " + networkName, {T("$SLID_MsgOpen"), T("$SLID_MsgWhoosh"), T("$SLID_MsgAccessLink")},
+                    UIHelper::ShowMessageBox(T("$SLID_MsgLinkPrefix") + networkName, {T("$SLID_MsgOpen"), T("$SLID_MsgWhoosh"), T("$SLID_MsgAccessLink")},
                         [networkName, containerID, activatorID](int idx) {
                             if (idx == 0) {
                                 SKSE::GetTaskInterface()->AddTask([containerID, activatorID]() {
