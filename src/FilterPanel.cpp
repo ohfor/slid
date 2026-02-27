@@ -2202,6 +2202,8 @@ namespace FilterPanel {
     static FilterRow::DropdownContext MakeDropdownContext() {
         int slot = s_selectedIndex - s_scrollOffset;
         double anchorY = ROW_Y + FILTER_OFFSET + slot * ROW_HEIGHT;
+        logger::info("MakeDropdownContext: selectedIndex={}, scrollOffset={}, slot={}, anchorY={:.1f}, movie={}",
+                     s_selectedIndex, s_scrollOffset, slot, anchorY, s_movie ? "valid" : "null");
         return { s_movie, ROW_X, anchorY };
     }
 
@@ -2232,6 +2234,7 @@ namespace FilterPanel {
 
     // Place an empty FilterRow and tell it to self-setup
     static void BeginAddFilter() {
+        int prevSize = static_cast<int>(s_filterRows.size());
         s_filterRows.emplace_back();
         int newFamilyIdx = static_cast<int>(s_filterRows.size()) - 1;
 
@@ -2248,6 +2251,12 @@ namespace FilterPanel {
             int maxOffset = std::max(0, displayCount - MAX_VISIBLE_ROWS);
             s_scrollOffset = std::clamp(s_scrollOffset, 0, maxOffset);
         }
+
+        logger::info("BeginAddFilter: families {} -> {}, displayRows={}, selectedIndex={}, scrollOffset={}, "
+                     "MAX_VISIBLE={}, TOTAL_SLOTS={}, s_openInstance={}",
+                     prevSize, newFamilyIdx + 1, displayCount, s_selectedIndex, s_scrollOffset,
+                     MAX_VISIBLE_ROWS, TOTAL_ROW_SLOTS,
+                     Dropdown::IsAnyOpen() ? "SET" : "null");
 
         PopulateList();
 

@@ -720,6 +720,12 @@ namespace SLIDMenu {
                     return;
                 }
 
+                // Dropdown takes priority over all panel clicks AND action bar
+                if (Dropdown::IsAnyOpen()) {
+                    Dropdown::GetOpen()->OnMouseClick(mx, my);
+                    return;
+                }
+
                 // ActionBar hit test (before panel dispatch)
                 {
                     int hitBtn = ActionBar::HitTest(mx, my);
@@ -731,12 +737,6 @@ namespace SLIDMenu {
                         ActivateButton(menu, hitBtn);
                         return;
                     }
-                }
-
-                // Dropdown takes priority over all panel clicks
-                if (Dropdown::IsAnyOpen()) {
-                    Dropdown::GetOpen()->OnMouseClick(mx, my);
-                    return;
                 }
 
                 // Check CatchAllPanel

@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.1] - 2026-02-27
+
+### Fixed
+
+- Powers (Create Link, Add Container, etc.) equipped to left/right hand like spells instead of the Power/Shout key (Z). SPEL records were missing the ETYP subrecord (`00025BEE` Voice equipment slot)
+- Dropdown singleton pointer (`s_openInstance`) could become stale or dangling, potentially blocking all mouse and gamepad input in the config menu. Added destructor, move semantics, and unconditional pointer cleanup in Cancel/Destroy. `IsAnyOpen()` now validates the pointed-to dropdown is actually open
+- Config menu mouse handler checked ActionBar hit test before checking for open dropdowns, allowing accidental button activation while a dropdown was visible
+- Conjure Link Chest showed "Steal from Chest" prompt instead of the normal activation text when summoned inside merchant cells. Spawned chest now has player ownership set explicitly
+- Conjure Link Chest could leave an orphaned permanent chest in the world if the player left the cell before the 2-minute timer expired. Added cell-detach event listener that despawns the chest and dispels the effect when the player exits the cell
+- Conjure Link Chest could leave an orphaned chest in the save if the player saved and loaded while the chest was active. `Clear()` now attempts `Disable`/`SetDelete` on the tracked ref before resetting state
 
 ## [1.2.0] - 2026-02-21
 

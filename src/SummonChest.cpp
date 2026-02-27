@@ -14,8 +14,9 @@ namespace SummonChest {
         constexpr RE::FormID kChestBaseFormID = 0x0F8478;
         constexpr auto       kSkyrimPlugin    = "Skyrim.esm"sv;
 
-        // Effect shaders from our ESP
+        // Effect shaders and spell from our ESP
         constexpr RE::FormID kSummonEFSH   = 0x81B;    // Summon shader (applied to chest)
+        constexpr RE::FormID kSummonSPEL   = 0x818;    // Conjure Link Chest spell
         constexpr auto       kPluginName   = "SLID.esp"sv;
         constexpr float      kShaderDuration = 120.0f;  // matches MGEF duration (2 minutes)
 
@@ -25,6 +26,59 @@ namespace SummonChest {
         // Raycast: cast from player height down to well below
         constexpr float kRaycastAbovePlayer = 50.0f;   // start slightly above player head
         constexpr float kRaycastBelowPlayer = 500.0f;  // reach well below player feet
+
+        // Dispel the summon MGEF (triggers OnEffectFinish → DespawnSummonChest)
+        void DispelSummonEffect() {
+            auto* player = RE::PlayerCharacter::GetSingleton();
+            auto* dh = RE::TESDataHandler::GetSingleton();
+            if (!player || !dh) return;
+
+            auto* spell = dh->LookupForm<RE::SpellItem>(kSummonSPEL, kPluginName);
+            if (spell) {
+                auto handle = player->GetHandle();
+                player->AsMagicTarget()->DispelEffect(spell, handle);
+            }
+        }
+
+        // Cell-detach listener: despawns summoned chest when its ref detaches from the loaded cell
+        class CellDetachListener : public RE::BSTEventSink<RE::TESCellAttachDetachEvent> {
+        public:
+            static CellDetachListener* GetSingleton() {
+                static CellDetachListener singleton;
+                return &singleton;
+            }
+
+            RE::BSEventNotifyControl ProcessEvent(
+                const RE::TESCellAttachDetachEvent* a_event,
+                RE::BSTEventSource<RE::TESCellAttachDetachEvent>*) override {
+
+                // Only care about detach events while a chest is active
+                if (!a_event || a_event->attached || s_chestRefID == 0) {
+                    return RE::BSEventNotifyControl::kContinue;
+                }
+
+                // Check if the detaching ref is our summoned chest
+                auto* ref = a_event->reference.get();
+                if (!ref || ref->GetFormID() != s_chestRefID) {
+                    return RE::BSEventNotifyControl::kContinue;
+                }
+
+                logger::info("SummonChest: chest {:08X} detaching from cell — despawning", s_chestRefID);
+
+                // Despawn immediately (ref is still accessible during the detach event)
+                Despawn();
+
+                // Dispel the MGEF on the game thread so OnEffectFinish doesn't try to double-despawn
+                SKSE::GetTaskInterface()->AddTask([]() {
+                    DispelSummonEffect();
+                });
+
+                return RE::BSEventNotifyControl::kContinue;
+            }
+
+        private:
+            CellDetachListener() = default;
+        };
     }
 
     void Summon(const std::string& a_networkName) {
@@ -129,6 +183,12 @@ namespace SummonChest {
         std::string chestName = a_networkName + " Link";
         spawnedRef->SetDisplayName(chestName.c_str(), true);
 
+        // Set ownership to player so the chest never shows "Steal from" in merchant cells
+        auto* playerBase = RE::TESForm::LookupByID<RE::TESNPC>(0x7);  // PlayerRef base form
+        if (playerBase) {
+            spawnedRef->extraList.SetOwner(playerBase);
+        }
+
         // Store state
         s_chestRefID = spawnedRef->GetFormID();
         s_networkName = a_networkName;
@@ -180,6 +240,8 @@ namespace SummonChest {
             ref->Disable();
             ref->SetDelete(true);
             logger::info("SummonChest::Despawn: removed chest {:08X}", s_chestRefID);
+        } else {
+            logger::warn("SummonChest::Despawn: chest {:08X} not in memory (cell unloaded?)", s_chestRefID);
         }
 
         s_chestRefID = 0;
@@ -199,8 +261,27 @@ namespace SummonChest {
     }
 
     void Clear() {
+        // Try to clean up the chest ref before forgetting about it
+        if (s_chestRefID != 0) {
+            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(s_chestRefID);
+            if (ref) {
+                ref->Disable();
+                ref->SetDelete(true);
+                logger::info("SummonChest::Clear: cleaned up chest {:08X}", s_chestRefID);
+            }
+        }
         s_chestRefID = 0;
         s_networkName.clear();
         logger::debug("SummonChest::Clear: state reset");
+    }
+
+    void RegisterEventSink() {
+        auto* holder = RE::ScriptEventSourceHolder::GetSingleton();
+        if (!holder) {
+            logger::error("SummonChest: ScriptEventSourceHolder not available");
+            return;
+        }
+        holder->AddEventSink(CellDetachListener::GetSingleton());
+        logger::info("SummonChest: registered cell-detach event sink");
     }
 }

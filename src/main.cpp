@@ -235,6 +235,7 @@ namespace {
                 WhooshConfig::Menu::Register();
                 WhooshConfig::InputHandler::Register();
                 SalesProcessor::RegisterEventSinks();
+                SummonChest::RegisterEventSink();
                 SellOverview::Menu::Register();
                 SellOverview::InputHandler::Register();
                 WelcomeMenu::Menu::Register();

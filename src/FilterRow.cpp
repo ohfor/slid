@@ -118,7 +118,14 @@ namespace {
 void FilterRow::OpenContainerDropdown(const DropdownContext& a_ctx, int a_childIndex,
                                        OnContainerResult a_onResult)
 {
-    if (!a_ctx.movie) return;
+    logger::info("OpenContainerDropdown: this={}, childIndex={}, movie={}, anchor=({:.1f},{:.1f})",
+                 fmt::ptr(this), a_childIndex, a_ctx.movie ? "valid" : "null",
+                 a_ctx.anchorX, a_ctx.anchorY);
+
+    if (!a_ctx.movie) {
+        logger::error("OpenContainerDropdown: movie is null, aborting");
+        return;
+    }
 
     // Determine current container for pre-selection
     RE::FormID currentContainer = 0;
@@ -243,7 +250,14 @@ void FilterRow::BeginSetup(const DropdownContext& a_ctx,
                             OnRefresh a_onRefresh,
                             std::function<void()> a_onCancelled)
 {
-    if (!a_ctx.movie) return;
+    logger::info("BeginSetup: this={}, movie={}, anchor=({:.1f},{:.1f}), existingRows={}",
+                 fmt::ptr(this), a_ctx.movie ? "valid" : "null",
+                 a_ctx.anchorX, a_ctx.anchorY, a_existingRows.size());
+
+    if (!a_ctx.movie) {
+        logger::error("BeginSetup: movie is null, aborting");
+        return;
+    }
 
     auto* registry = FilterRegistry::GetSingleton();
     const auto& familyRoots = registry->GetFamilyRoots();
@@ -275,6 +289,11 @@ void FilterRow::BeginSetup(const DropdownContext& a_ctx,
         e.color = e.enabled ? MenuLayout::COLOR_FILTER : 0x555555;
         entries.push_back(std::move(e));
     }
+
+    int enabledCount = 0;
+    for (const auto& e : entries) { if (e.enabled) ++enabledCount; }
+    logger::info("BeginSetup: familyRoots={}, entries={}, enabled={}, disabled={}",
+                 familyRoots.size(), entries.size(), enabledCount, entries.size() - enabledCount);
 
     // Sort: available first (alpha), then unavailable (alpha)
     std::sort(entries.begin(), entries.end(),

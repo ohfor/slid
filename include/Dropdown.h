@@ -27,6 +27,11 @@ public:
     using Callback = std::function<void(bool confirmed, int index, const std::string& id)>;
 
     Dropdown() = default;
+    ~Dropdown();
+    Dropdown(Dropdown&& a_other) noexcept;
+    Dropdown& operator=(Dropdown&& a_other) noexcept;
+    Dropdown(const Dropdown&) = delete;
+    Dropdown& operator=(const Dropdown&) = delete;
 
     // --- Closed state ---
     // Set what the dropdown displays when closed.

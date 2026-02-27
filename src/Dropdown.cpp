@@ -35,10 +35,88 @@ static constexpr int ALPHA_ROW_SEL       = 85;
 static constexpr int ALPHA_ROW_NORM      = 60;
 static constexpr int ALPHA_ROW_HOV       = 75;
 
+// --- Lifecycle ---
+
+Dropdown::~Dropdown() {
+    if (s_openInstance == this) s_openInstance = nullptr;
+}
+
+Dropdown::Dropdown(Dropdown&& a_other) noexcept
+    : m_selectedId(std::move(a_other.m_selectedId))
+    , m_selectedLabel(std::move(a_other.m_selectedLabel))
+    , m_selectedSublabel(std::move(a_other.m_selectedSublabel))
+    , m_closedColorOverride(a_other.m_closedColorOverride)
+    , m_entries(std::move(a_other.m_entries))
+    , m_config(std::move(a_other.m_config))
+    , m_open(a_other.m_open)
+    , m_callback(std::move(a_other.m_callback))
+    , m_cursorIndex(a_other.m_cursorIndex)
+    , m_scrollOffset(a_other.m_scrollOffset)
+    , m_hoverIndex(a_other.m_hoverIndex)
+    , m_movie(a_other.m_movie)
+    , m_anchorX(a_other.m_anchorX)
+    , m_anchorY(a_other.m_anchorY)
+    , m_popupX(a_other.m_popupX)
+    , m_popupY(a_other.m_popupY)
+    , m_popupW(a_other.m_popupW)
+    , m_popupH(a_other.m_popupH)
+    , m_rowAreaY(a_other.m_rowAreaY)
+    , m_scrollTrackX(a_other.m_scrollTrackX)
+    , m_visibleCount(a_other.m_visibleCount)
+    , m_scrollThumbClip(std::move(a_other.m_scrollThumbClip))
+{
+    for (int i = 0; i < MAX_ROW_SLOTS; ++i)
+        m_rowClips[i] = std::move(a_other.m_rowClips[i]);
+
+    // Transfer singleton tracking to new address
+    if (s_openInstance == &a_other) s_openInstance = this;
+    a_other.m_open = false;
+    a_other.m_movie = nullptr;
+}
+
+Dropdown& Dropdown::operator=(Dropdown&& a_other) noexcept {
+    if (this == &a_other) return *this;
+
+    // If we were the open instance, clear it before overwrite
+    if (s_openInstance == this) s_openInstance = nullptr;
+
+    m_selectedId = std::move(a_other.m_selectedId);
+    m_selectedLabel = std::move(a_other.m_selectedLabel);
+    m_selectedSublabel = std::move(a_other.m_selectedSublabel);
+    m_closedColorOverride = a_other.m_closedColorOverride;
+    m_entries = std::move(a_other.m_entries);
+    m_config = std::move(a_other.m_config);
+    m_open = a_other.m_open;
+    m_callback = std::move(a_other.m_callback);
+    m_cursorIndex = a_other.m_cursorIndex;
+    m_scrollOffset = a_other.m_scrollOffset;
+    m_hoverIndex = a_other.m_hoverIndex;
+    m_movie = a_other.m_movie;
+    m_anchorX = a_other.m_anchorX;
+    m_anchorY = a_other.m_anchorY;
+    m_popupX = a_other.m_popupX;
+    m_popupY = a_other.m_popupY;
+    m_popupW = a_other.m_popupW;
+    m_popupH = a_other.m_popupH;
+    m_rowAreaY = a_other.m_rowAreaY;
+    m_scrollTrackX = a_other.m_scrollTrackX;
+    m_visibleCount = a_other.m_visibleCount;
+    m_scrollThumbClip = std::move(a_other.m_scrollThumbClip);
+    for (int i = 0; i < MAX_ROW_SLOTS; ++i)
+        m_rowClips[i] = std::move(a_other.m_rowClips[i]);
+
+    // Transfer singleton tracking to new address
+    if (s_openInstance == &a_other) s_openInstance = this;
+    a_other.m_open = false;
+    a_other.m_movie = nullptr;
+
+    return *this;
+}
+
 // --- Static API ---
 
-bool Dropdown::IsAnyOpen() { return s_openInstance != nullptr; }
-Dropdown* Dropdown::GetOpen() { return s_openInstance; }
+bool Dropdown::IsAnyOpen() { return s_openInstance != nullptr && s_openInstance->m_open; }
+Dropdown* Dropdown::GetOpen() { return IsAnyOpen() ? s_openInstance : nullptr; }
 
 // --- Value access ---
 
@@ -223,7 +301,12 @@ void Dropdown::RenderClosed(RE::GFxMovieView* a_movie, RE::GFxValue& a_parentCli
 
 void Dropdown::Open(RE::GFxMovieView* a_movie, double a_anchorX, double a_anchorY,
                     const Config& a_config, std::vector<Entry> a_entries, Callback a_callback) {
+    logger::info("Dropdown::Open: this={}, title='{}', entries={}, anchor=({:.1f},{:.1f}), movie={}, prevOpen={}",
+                 fmt::ptr(this), a_config.title, a_entries.size(), a_anchorX, a_anchorY,
+                 a_movie ? "valid" : "null", s_openInstance ? fmt::ptr(s_openInstance) : "null");
+
     if (s_openInstance) {
+        logger::info("Dropdown::Open: cancelling previous instance {}", fmt::ptr(s_openInstance));
         s_openInstance->Cancel();
     }
 
@@ -258,8 +341,8 @@ void Dropdown::Open(RE::GFxMovieView* a_movie, double a_anchorX, double a_anchor
     DrawPopup();
     PopulateRows();
 
-    logger::info("Dropdown: opened '{}' with {} entries, selected={}",
-                 m_config.title, entryCount, m_cursorIndex);
+    logger::info("Dropdown: opened '{}' with {} entries, selected={}, visibleCount={}",
+                 m_config.title, entryCount, m_cursorIndex, m_visibleCount);
 }
 
 bool Dropdown::IsOpen() const { return m_open; }
@@ -311,9 +394,9 @@ void Dropdown::Confirm() {
 }
 
 void Dropdown::Cancel() {
+    if (s_openInstance == this) s_openInstance = nullptr;
     if (!m_open) return;
     m_open = false;
-    if (s_openInstance == this) s_openInstance = nullptr;
 
     DestroyPopupVisuals();
 
@@ -391,9 +474,9 @@ void Dropdown::ClearHover() {
 }
 
 void Dropdown::Destroy() {
+    if (s_openInstance == this) s_openInstance = nullptr;
     if (m_open) {
         m_open = false;
-        if (s_openInstance == this) s_openInstance = nullptr;
         DestroyPopupVisuals();
     }
     m_callback = nullptr;
@@ -415,11 +498,17 @@ int Dropdown::FindNextEnabled(int a_from, int a_dir) const {
 }
 
 void Dropdown::DrawPopup() {
-    if (!m_movie) return;
+    if (!m_movie) {
+        logger::error("DrawPopup: m_movie is null, aborting");
+        return;
+    }
 
     RE::GFxValue root;
     m_movie->GetVariable(&root, "_root");
-    if (root.IsUndefined()) return;
+    if (root.IsUndefined()) {
+        logger::error("DrawPopup: _root is undefined, aborting");
+        return;
+    }
 
     int entryCount = static_cast<int>(m_entries.size());
     int visibleRows = std::min(entryCount, m_config.maxVisible);
@@ -550,6 +639,9 @@ void Dropdown::DrawPopup() {
             m_scrollThumbClip = thumbClip;
         }
     }
+
+    logger::info("DrawPopup: completed, popupY={:.1f}, neededH={:.1f}, visibleRows={}, hasScroll={}",
+                 m_popupY, neededH, visibleRows, entryCount > m_visibleCount);
 }
 
 void Dropdown::PopulateRows() {

@@ -20,4 +20,7 @@ namespace SummonChest {
 
     // Reset all state (called on game load/revert)
     void Clear();
+
+    // Register cell-detach event sink (call once at kDataLoaded)
+    void RegisterEventSink();
 }
