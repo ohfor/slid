@@ -1,5 +1,7 @@
 #pragma once
 
+#include "RestockCategory.h"
+
 #include <RE/Skyrim.h>
 
 #include <string>
@@ -20,4 +22,7 @@ struct Network {
     // Whoosh configuration (per-network)
     std::unordered_set<std::string> whooshFilters;  // filter IDs enabled for drain
     bool whooshConfigured = false;                   // Has player configured Whoosh for this network?
+
+    // Restock configuration (per-network)
+    RestockCategory::RestockConfig restockConfig;
 };

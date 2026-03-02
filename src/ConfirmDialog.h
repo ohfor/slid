@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ButtonBar.h"
 #include "ScaleformUtil.h"
 
 #include <functional>

@@ -13,6 +13,12 @@
 #include "TranslationService.h"
 #include "Version.h"
 #include "WelcomeMenu.h"
+#include "SCIEIntegration.h"
+#include "ContextResolver.h"
+#include "ContextMenu.h"
+#include "SellOverviewMenu.h"
+#include "WhooshConfigMenu.h"
+#include "RestockConfigMenu.h"
 
 #include <random>
 
@@ -324,11 +330,11 @@ namespace ConsoleCommands {
                 return;
             }
 
-            // Check if target is tagged — untag + clear filter references
+            // Check if target is tagged — untag only (filter assignments preserved;
+            // ContainerRegistry handles resolution/availability in the config UI)
             if (mgr->IsTagged(formID)) {
                 auto tagName = mgr->GetTagName(formID);
                 mgr->UntagContainer(formID);
-                mgr->ClearContainerReferences(formID);
                 std::string msg = TF("$SLID_NotifyDeregistered", tagName);
                 RE::DebugNotification(msg.c_str());
                 Feedback::OnUntagContainer(ref);
@@ -433,8 +439,29 @@ namespace ConsoleCommands {
                 }
             }
 
-            std::string msg = TF("$SLID_NotifyDetected", std::to_string(applied));
-            RE::DebugNotification(msg.c_str());
+            // Build detection summary
+            std::string summary = "SLID: " + TF("$SLID_NotifyDetected", std::to_string(applied));
+
+            // Container lists (General Stores, LOTD Safehouse, etc.)
+            const auto& clists = mgr->GetContainerLists();
+            for (const auto& clist : clists) {
+                if (!mgr->IsContainerListEnabled(clist.name)) continue;
+                int count = 0;
+                for (const auto& entry : clist.containers) {
+                    if (entry.resolvedFormID != 0) count++;
+                }
+                if (count > 0) {
+                    summary += ". " + std::to_string(count) + " " + clist.name;
+                }
+            }
+
+            // SCIE containers (if any)
+            const auto& scieContainers = SCIEIntegration::GetCachedContainers();
+            if (!scieContainers.empty()) {
+                summary += ". " + std::to_string(scieContainers.size()) + " SCIE";
+            }
+
+            RE::DebugNotification(summary.c_str());
             Feedback::OnDetectContainers();
 
             logger::info("BeginDetect: {} masters (white), {} others (blue), sell={} (orange), {} total applied",
@@ -721,46 +748,38 @@ namespace ConsoleCommands {
             auto* player = RE::PlayerCharacter::GetSingleton();
             if (!dataHandler || !player) return;
 
-            // All SPEL FormIDs that have ever existed (includes deprecated ones)
-            constexpr RE::FormID kAllSpells[] = {0x801, 0x803, 0x805, 0x807, 0x809, 0x80B, 0x816, 0x818};
-            // Current active set (SetMaster, Tag, Deregister, Detect, SellContainer)
-            constexpr RE::FormID kBaseSpells[] = {0x801, 0x803, 0x805, 0x809, 0x816};
-            constexpr RE::FormID kSummonSpell = 0x818;
+            // All historical SPEL local IDs — always remove these
+            constexpr RE::FormID kLegacySpells[] = {
+                0x801, 0x803, 0x805, 0x807, 0x809, 0x80B, 0x816, 0x818
+            };
 
-            // Remove all known SLID spells
-            for (auto localID : kAllSpells) {
+            uint32_t removed = 0;
+            for (auto localID : kLegacySpells) {
                 auto* spell = dataHandler->LookupForm<RE::SpellItem>(localID, kPluginName);
                 if (spell && player->HasSpell(spell)) {
                     player->RemoveSpell(spell);
+                    ++removed;
                 }
             }
 
-            // If mod is disabled, don't re-add
+            // Also remove context power if present (will re-add below if enabled)
+            auto* contextSpell = RE::TESForm::LookupByEditorID<RE::SpellItem>("SLID_ContextSPEL");
+            if (contextSpell && player->HasSpell(contextSpell)) {
+                player->RemoveSpell(contextSpell);
+                ++removed;
+            }
+
             if (!Settings::bModEnabled) {
-                logger::info("RefreshPowers: removed all powers (mod disabled)");
+                logger::info("RefreshPowers: removed {} powers (mod disabled)", removed);
                 return;
             }
 
-            // Re-add base powers
-            uint32_t added = 0;
-            for (auto localID : kBaseSpells) {
-                auto* spell = dataHandler->LookupForm<RE::SpellItem>(localID, kPluginName);
-                if (spell) {
-                    player->AddSpell(spell);
-                    ++added;
-                }
+            if (contextSpell) {
+                player->AddSpell(contextSpell);
+                logger::info("RefreshPowers: removed {} legacy, granted context power", removed);
+            } else {
+                logger::warn("RefreshPowers: SLID_ContextSPEL not found in ESP");
             }
-
-            // Conditionally add Summon power
-            if (Settings::bSummonEnabled) {
-                auto* spell = dataHandler->LookupForm<RE::SpellItem>(kSummonSpell, kPluginName);
-                if (spell) {
-                    player->AddSpell(spell);
-                    ++added;
-                }
-            }
-
-            logger::info("RefreshPowers: removed all, re-added {} powers", added);
         }
 
         // =================================================================
@@ -1627,6 +1646,15 @@ namespace ConsoleCommands {
                 }
             }
 
+            // --- [Preset:Name:Restock] ---
+            if (network->restockConfig.configured && !network->restockConfig.itemQuantities.empty()) {
+                out << "[Preset:" << presetName << ":Restock]\n";
+                for (const auto& [catID, qty] : network->restockConfig.itemQuantities) {
+                    out << catID << " = " << qty << "\n";
+                }
+                out << "\n";
+            }
+
             out.close();
             logger::info("GeneratePresetINI: wrote {} (preset '{}' from network '{}')",
                          outputPath.string(), presetName, networkName);
@@ -1695,6 +1723,451 @@ namespace ConsoleCommands {
         });
     }
 
+    // =========================================================================
+    // Context Action Dispatch (unified power)
+    // =========================================================================
+
+    /// Open a master container remotely via bypass activation.
+    void DoOpenMasterRemote(const std::string& a_networkName) {
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* net = mgr->FindNetwork(a_networkName);
+        if (!net || net->masterFormID == 0) return;
+
+        auto masterID = net->masterFormID;
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player) return;
+
+        auto* container = RE::TESForm::LookupByID<RE::TESObjectREFR>(masterID);
+        if (!container) return;
+
+        ActivationHook::SetBypass(masterID);
+        container->ActivateRef(player, 0, nullptr, 0, false);
+    }
+
+    /// Execute Whoosh for a network — pops WhooshConfigMenu if not yet configured.
+    void DoWhoosh(const std::string& a_networkName) {
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* net = mgr->FindNetwork(a_networkName);
+        if (!net) return;
+
+        if (!net->whooshConfigured) {
+            auto defaultFilters = FilterRegistry::DefaultWhooshFilters();
+            WhooshConfig::Menu::Show(defaultFilters,
+                [networkName = a_networkName](bool confirmed, std::unordered_set<std::string> filters) {
+                    if (!confirmed) return;
+                    auto* nmgr = NetworkManager::GetSingleton();
+                    nmgr->SetWhooshConfig(networkName, filters);
+
+                    auto moved = Distributor::Whoosh(networkName);
+                    if (moved > 0) {
+                        Feedback::OnWhoosh();
+                        std::string msg = TF("$SLID_NotifyWhooshed", std::to_string(moved));
+                        RE::DebugNotification(msg.c_str());
+                    } else {
+                        RE::DebugNotification(T("$SLID_NothingToWhoosh").c_str());
+                    }
+                });
+            return;
+        }
+
+        auto moved = Distributor::Whoosh(a_networkName);
+        if (moved > 0) {
+            Feedback::OnWhoosh();
+            std::string msg = TF("$SLID_NotifyWhooshed", std::to_string(moved));
+            RE::DebugNotification(msg.c_str());
+        } else {
+            RE::DebugNotification(T("$SLID_NothingToWhoosh").c_str());
+        }
+    }
+
+    /// Run Sort (distribute) for a network.
+    void DoSort(const std::string& a_networkName) {
+        auto result = Distributor::Distribute(a_networkName);
+        Feedback::OnSort();
+        std::string msg = TF("$SLID_NotifySorted", std::to_string(result.totalItems));
+        RE::DebugNotification(msg.c_str());
+    }
+
+    /// Sweep (gather all items back to master).
+    void DoSweep(const std::string& a_networkName) {
+        auto gathered = Distributor::GatherToMaster(a_networkName);
+        std::string msg = TF("$SLID_NotifySwept", std::to_string(gathered));
+        RE::DebugNotification(msg.c_str());
+    }
+
+    /// Open the config menu for a network.
+    void DoShowConfig(const std::string& a_networkName) {
+        SLIDMenu::ConfigMenu::Show(a_networkName);
+    }
+
+    /// Run Detect (shader highlight on all linked containers).
+    void DoDetect() {
+        BeginDetect(nullptr);
+    }
+
+    /// Show sell overview popup.
+    void DoShowSellOverview() {
+        SellOverview::Menu::Show();
+    }
+
+    /// Rename a container via the tag-input popup (reuses tag flow).
+    void DoRenameContainer(RE::FormID a_formID) {
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
+        if (!ref) return;
+
+        bool alreadyTagged = mgr->IsTagged(a_formID);
+        std::string defaultName;
+
+        if (alreadyTagged) {
+            defaultName = mgr->GetTagName(a_formID);
+        } else {
+            defaultName = T("$SLID_Container");
+            if (auto* base = ref->GetBaseObject()) {
+                if (base->GetName() && base->GetName()[0] != '\0') {
+                    defaultName = base->GetName();
+                }
+            }
+        }
+
+        TagInputMenu::Menu::Show(a_formID, defaultName, alreadyTagged);
+    }
+
+    /// Remove a container: untag + clear filter references.
+    /// If it's the sell container, clear sell designation.
+    void DoRemoveContainer(RE::FormID a_formID) {
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
+
+        // Check if it's the sell container
+        if (a_formID == mgr->GetSellContainerFormID()) {
+            mgr->ClearSellContainer();
+            RE::DebugNotification(T("$SLID_NotifySellRemoved").c_str());
+            if (ref) Feedback::OnClearSellContainer(ref);
+            return;
+        }
+
+        // Check if it's a master — dismantle network
+        auto networkName = mgr->FindNetworkByMaster(a_formID);
+        if (!networkName.empty()) {
+            if (ref) UIHelper::BeginDismantleNetwork(ref);
+            return;
+        }
+
+        // Tagged — untag only.  Filter assignments are preserved; ContainerRegistry
+        // handles resolution/availability and the config UI shows the container
+        // as unavailable if it can no longer be reached.
+        if (mgr->IsTagged(a_formID)) {
+            auto tagName = mgr->GetTagName(a_formID);
+            mgr->UntagContainer(a_formID);
+            std::string msg = TF("$SLID_NotifyDeregistered", tagName);
+            RE::DebugNotification(msg.c_str());
+            if (ref) Feedback::OnUntagContainer(ref);
+        } else {
+            // Not tagged and not a master or sell — nothing to remove
+            RE::DebugNotification(T("$SLID_ErrNotMasterOrTagged").c_str());
+            Feedback::OnError();
+        }
+    }
+
+    /// Create a new Link with the targeted container as master.
+    void DoCreateLink(RE::FormID a_formID) {
+        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
+        if (!ref || !ref->GetContainer()) return;
+
+        auto* mgr = NetworkManager::GetSingleton();
+
+        // Cannot designate a sell container as master
+        if (mgr->GetSellContainerFormID() == a_formID) {
+            RE::DebugNotification(T("$SLID_ErrSellAsMaster").c_str());
+            Feedback::OnError();
+            return;
+        }
+
+        // Already a master — open config instead
+        auto existingNet = mgr->FindNetworkByMaster(a_formID);
+        if (!existingNet.empty()) {
+            DoShowConfig(existingNet);
+            return;
+        }
+
+        auto* cell = ref->GetParentCell();
+        std::string baseName;
+        if (cell && cell->GetFullName() && cell->GetFullName()[0] != '\0') {
+            baseName = cell->GetFullName();
+        } else {
+            baseName = "Storage";
+        }
+
+        ShowNetworkNamingFlow(a_formID, baseName);
+    }
+
+    /// Add container to an existing Link (tag + rename).
+    void DoAddToLink(RE::FormID a_formID, const std::string& a_networkName) {
+        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
+        if (!ref) return;
+
+        // Determine default name from base object
+        std::string defaultName = T("$SLID_Container");
+        if (auto* base = ref->GetBaseObject()) {
+            if (base->GetName() && base->GetName()[0] != '\0') {
+                defaultName = base->GetName();
+            }
+        }
+
+        // If already tagged, use existing name as default
+        auto* mgr = NetworkManager::GetSingleton();
+        if (mgr->IsTagged(a_formID)) {
+            defaultName = mgr->GetTagName(a_formID);
+        }
+
+        // Open tag-input for naming — only tag on confirm
+        TagInputMenu::Menu::ShowWithCallback(T("$SLID_DlgRenameContainer"), defaultName,
+            [a_formID, networkName = a_networkName](const std::string& chosenName) {
+                auto* mgr2 = NetworkManager::GetSingleton();
+                mgr2->TagContainer(a_formID, chosenName);
+                auto* ref2 = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
+                if (ref2) Feedback::OnTagContainer(ref2);
+                std::string msg = TF("$SLID_NotifyAddedToLink", chosenName, networkName);
+                RE::DebugNotification(msg.c_str());
+            });
+    }
+
+    /// Set a container as the sell container.
+    void DoSetAsSell(RE::FormID a_formID) {
+        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
+        if (!ref || !ref->GetContainer()) return;
+
+        auto* mgr = NetworkManager::GetSingleton();
+
+        // Cannot designate a master as sell
+        auto masterNet = mgr->FindNetworkByMaster(a_formID);
+        if (!masterNet.empty()) {
+            RE::DebugNotification(T("$SLID_ErrMasterAsSell").c_str());
+            Feedback::OnError();
+            return;
+        }
+
+        if (mgr->HasSellContainer()) {
+            RE::DebugNotification(T("$SLID_ErrSellAlreadySet").c_str());
+            Feedback::OnError();
+            return;
+        }
+
+        mgr->SetSellContainer(a_formID);
+
+        if (!mgr->IsTagged(a_formID)) {
+            mgr->TagContainer(a_formID, T("$SLID_SellContainer"));
+        }
+
+        RE::DebugNotification(T("$SLID_NotifySellDesignated").c_str());
+        Feedback::OnSetSellContainer(ref);
+        WelcomeMenu::TryShowWelcome();
+    }
+
+    /// Destroy a Link — resolve master from network and begin dismantle flow.
+    void DoDestroyLink(const std::string& a_networkName, RE::FormID a_targetFormID) {
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* net = mgr->FindNetwork(a_networkName);
+        if (!net) return;
+
+        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(
+            a_targetFormID ? a_targetFormID : net->masterFormID);
+        if (ref) {
+            UIHelper::BeginDismantleNetwork(ref);
+        }
+    }
+
+    /// Open WhooshConfigMenu for reconfiguring a network's Whoosh categories.
+    void DoShowWhooshConfig(const std::string& a_networkName) {
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* net = mgr->FindNetwork(a_networkName);
+        if (!net) return;
+
+        auto currentFilters = net->whooshConfigured
+            ? net->whooshFilters
+            : FilterRegistry::DefaultWhooshFilters();
+
+        WhooshConfig::Menu::Show(currentFilters,
+            [networkName = a_networkName](bool confirmed, std::unordered_set<std::string> filters) {
+                if (!confirmed) return;
+                NetworkManager::GetSingleton()->SetWhooshConfig(networkName, filters);
+                logger::info("Whoosh: reconfigured via context menu hold");
+            });
+    }
+
+    /// Execute restock for a network. If not configured, show config menu first.
+    void DoRestock(const std::string& a_networkName) {
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* net = mgr->FindNetwork(a_networkName);
+        if (!net) return;
+
+        if (!net->restockConfig.configured) {
+            auto defaultConfig = RestockCategory::DefaultConfig();
+            RestockConfig::Menu::Show(defaultConfig,
+                [networkName = a_networkName](bool confirmed, RestockCategory::RestockConfig config) {
+                    if (!confirmed) return;
+                    auto* nmgr = NetworkManager::GetSingleton();
+                    nmgr->SetRestockConfig(networkName, config);
+
+                    auto result = Distributor::Restock(networkName);
+                    if (result.totalItems > 0) {
+                        std::string msg = TF("$SLID_NotifyRestocked", std::to_string(result.totalItems));
+                        RE::DebugNotification(msg.c_str());
+                    } else {
+                        RE::DebugNotification(T("$SLID_NothingToRestock").c_str());
+                    }
+                });
+            return;
+        }
+
+        auto result = Distributor::Restock(a_networkName);
+        if (result.totalItems > 0) {
+            std::string msg = TF("$SLID_NotifyRestocked", std::to_string(result.totalItems));
+            RE::DebugNotification(msg.c_str());
+        } else {
+            RE::DebugNotification(T("$SLID_NothingToRestock").c_str());
+        }
+    }
+
+    /// Open RestockConfigMenu for reconfiguring a network's Restock categories.
+    void DoShowRestockConfig(const std::string& a_networkName) {
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* net = mgr->FindNetwork(a_networkName);
+        if (!net) return;
+
+        auto currentConfig = net->restockConfig.configured
+            ? net->restockConfig
+            : RestockCategory::DefaultConfig();
+
+        RestockConfig::Menu::Show(currentConfig,
+            [networkName = a_networkName](bool confirmed, RestockCategory::RestockConfig config) {
+                if (!confirmed) return;
+                NetworkManager::GetSingleton()->SetRestockConfig(networkName, config);
+                logger::info("Restock: reconfigured via context menu hold");
+            });
+    }
+
+    /// Execute Whoosh then Restock in sequence.
+    void DoWhooshAndRestock(const std::string& a_networkName) {
+        // Whoosh first (dumps inventory to master)
+        DoWhoosh(a_networkName);
+
+        // Then restock (pulls items back from Link to player)
+        // If whoosh opened a config menu, restock will run after the user closes it.
+        // But if whoosh executed immediately, run restock now.
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* net = mgr->FindNetwork(a_networkName);
+        if (!net) return;
+
+        // Only run restock directly if whoosh didn't open a menu
+        if (net->whooshConfigured && !WhooshConfig::Menu::IsOpen()) {
+            DoRestock(a_networkName);
+        }
+    }
+
+    /// Dispatch a context action to the appropriate Do* handler.
+    void DispatchContextAction(ContextResolver::Action a_action,
+                                const std::string& a_networkName,
+                                RE::FormID a_targetFormID)
+    {
+        using Action = ContextResolver::Action;
+
+        switch (a_action) {
+            case Action::kOpen:
+                DoOpenMasterRemote(a_networkName);
+                break;
+            case Action::kWhoosh:
+                DoWhoosh(a_networkName);
+                break;
+            case Action::kSort:
+                DoSort(a_networkName);
+                break;
+            case Action::kSweep:
+                DoSweep(a_networkName);
+                break;
+            case Action::kConfigure:
+                DoShowConfig(a_networkName);
+                break;
+            case Action::kDetect:
+                DoDetect();
+                break;
+            case Action::kSummary:
+                DoShowSellOverview();
+                break;
+            case Action::kRename:
+                DoRenameContainer(a_targetFormID);
+                break;
+            case Action::kRemove:
+                DoRemoveContainer(a_targetFormID);
+                break;
+            case Action::kDestroyLink:
+                DoDestroyLink(a_networkName, a_targetFormID);
+                break;
+            case Action::kCreateLink:
+                DoCreateLink(a_targetFormID);
+                break;
+            case Action::kAddToLink:
+                DoAddToLink(a_targetFormID, a_networkName);
+                break;
+            case Action::kSetAsSell:
+                DoSetAsSell(a_targetFormID);
+                break;
+            case Action::kWhooshConfigure:
+                DoShowWhooshConfig(a_networkName);
+                break;
+            case Action::kRestock:
+                DoRestock(a_networkName);
+                break;
+            case Action::kRestockConfigure:
+                DoShowRestockConfig(a_networkName);
+                break;
+            case Action::kWhooshAndRestock:
+                DoWhooshAndRestock(a_networkName);
+                break;
+        }
+    }
+
+    /// Unified power native: resolve context from crosshair, show menu or fire directly.
+    void BeginContextAction(RE::StaticFunctionTag*) {
+        auto targetFormID = g_capturedTarget.exchange(0);
+        auto resolved = ContextResolver::Resolve(targetFormID);
+
+        // Air-empty: fire Detect directly (no menu)
+        if (resolved.context == ContextResolver::Context::kAirEmpty) {
+            SKSE::GetTaskInterface()->AddTask([]() {
+                DoDetect();
+            });
+            return;
+        }
+
+        // Vendor: pass through (do nothing — dialogue proceeds normally)
+        if (resolved.context == ContextResolver::Context::kVendor) {
+            return;
+        }
+
+        // Guard against menu conflicts
+        if (ContextMenu::Menu::IsOpen() ||
+            SLIDMenu::ConfigMenu::IsOpen() ||
+            SellOverview::Menu::IsOpen() ||
+            TagInputMenu::Menu::IsOpen() ||
+            WhooshConfig::Menu::IsOpen() ||
+            RestockConfig::Menu::IsOpen()) {
+            return;
+        }
+
+        SKSE::GetTaskInterface()->AddTask([resolved]() {
+            ContextMenu::Menu::Show(resolved,
+                [targetFID = resolved.targetFormID]
+                (ContextResolver::Action action, const std::string& networkName) {
+                    SKSE::GetTaskInterface()->AddTask(
+                        [action, networkName, targetFID]() {
+                            DispatchContextAction(action, networkName, targetFID);
+                        });
+                });
+        });
+    }
+
     bool RegisterFunctions(RE::BSScript::IVirtualMachine* a_vm) {
         const auto className = "SLID_Native"sv;
 
@@ -1706,6 +2179,7 @@ namespace ConsoleCommands {
         a_vm->RegisterFunction("BeginSellContainer"sv, className, BeginSellContainer);
         a_vm->RegisterFunction("BeginSummonChest"sv, className, BeginSummonChest);
         a_vm->RegisterFunction("DespawnSummonChest"sv, className, DespawnSummonChest);
+        a_vm->RegisterFunction("BeginContextAction"sv, className, BeginContextAction);
         a_vm->RegisterFunction("GetMasterNetwork"sv, className, GetMasterNetwork);
         a_vm->RegisterFunction("RemoveNetwork"sv, className, RemoveNetwork);
         a_vm->RegisterFunction("RemoveAllNetworks"sv, className, RemoveAllNetworks);
@@ -1808,11 +2282,19 @@ namespace ConsoleCommands {
     void RegisterEventSink() {
         auto* dataHandler = RE::TESDataHandler::GetSingleton();
 
+        // Legacy spell IDs (still in the capture set for transition saves)
         for (auto localID : kSpellIDs) {
             auto* spell = dataHandler->LookupForm<RE::SpellItem>(localID, kPluginName);
             if (spell) {
                 g_slidSpellIDs.insert(spell->GetFormID());
             }
+        }
+
+        // New unified context power (looked up by EditorID — no hardcoded FormID)
+        if (auto* contextSpell = RE::TESForm::LookupByEditorID<RE::SpellItem>("SLID_ContextSPEL")) {
+            g_slidSpellIDs.insert(contextSpell->GetFormID());
+            logger::info("RegisterEventSink: added SLID_ContextSPEL ({:08X}) to spell capture set",
+                         contextSpell->GetFormID());
         }
 
         auto* holder = RE::ScriptEventSourceHolder::GetSingleton();

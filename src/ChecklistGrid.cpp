@@ -375,16 +375,56 @@ namespace ChecklistGrid {
         int fontSize = m_config.fontSize;
         uint32_t labelColor = (item->checked || item->partial) ? m_config.colorLabel : m_config.colorLabelDim;
 
-        // Group roots get slightly brighter text when fully checked
+        // Group roots: brighter text
         if (item->isGroupRoot && !item->groupChildren.empty()) {
             if (item->checked) labelColor = 0xEEEEEE;
         }
 
         int N = static_cast<int>(m_items.size());
+
+        // Compute label width — shrink if quantity spinner is shown
+        double availW = m_config.colWidth - m_config.checkSize - m_config.checkGap - 8.0 - itemIndent;
+        double qtyFieldW = 0.0;
+        if (item->quantity >= 0) {
+            qtyFieldW = 46.0;  // space for "[999]"
+            availW -= qtyFieldW;
+        }
+
         ScaleformUtil::CreateLabel(m_movie, lblName.c_str(), m_baseDepth + 2 * N + idx,
             x + m_config.checkSize + m_config.checkGap + 4.0 + itemIndent, y + 2.0,
-            m_config.colWidth - m_config.checkSize - m_config.checkGap - 8.0 - itemIndent, m_config.rowHeight,
+            availW, m_config.rowHeight,
             label.c_str(), fontSize, labelColor);
+
+        // --- Quantity spinner (right-aligned in cell) ---
+        std::string qtyName = m_prefix + "Qty" + std::to_string(idx);
+        if (item->quantity >= 0) {
+            std::string qtyText = "[" + std::to_string(item->quantity) + "]";
+            double qtyX = x + m_config.colWidth - qtyFieldW - 2.0;
+            ScaleformUtil::CreateLabel(m_movie, qtyName.c_str(), m_baseDepth + 3 * N + 10 + idx,
+                qtyX, y + 2.0, qtyFieldW, m_config.rowHeight,
+                qtyText.c_str(), fontSize,
+                selected ? 0xFFFFFF : 0xAACC88);
+
+            // Right-align the quantity text
+            std::string qtyPath = std::string("_root.") + qtyName;
+            RE::GFxValue tf;
+            m_movie->GetVariable(&tf, qtyPath.c_str());
+            if (!tf.IsUndefined()) {
+                RE::GFxValue alignFmt;
+                m_movie->CreateObject(&alignFmt, "TextFormat");
+                if (!alignFmt.IsUndefined()) {
+                    RE::GFxValue alignVal;
+                    alignVal.SetString("right");
+                    alignFmt.SetMember("align", alignVal);
+                    RE::GFxValue fmtArgs[1];
+                    fmtArgs[0] = alignFmt;
+                    tf.Invoke("setTextFormat", nullptr, fmtArgs, 1);
+                    tf.Invoke("setNewTextFormat", nullptr, fmtArgs, 1);
+                }
+            }
+        } else {
+            RemoveClip(qtyName);
+        }
     }
 
     void Grid::DrawScrollbar() {
@@ -426,6 +466,7 @@ namespace ChecklistGrid {
             RemoveClip(m_prefix + "HL" + std::to_string(i));
             RemoveClip(m_prefix + "Chk" + std::to_string(i));
             RemoveClip(m_prefix + "Lbl" + std::to_string(i));
+            RemoveClip(m_prefix + "Qty" + std::to_string(i));
         }
         RemoveClip(m_prefix + "SBTrack");
         RemoveClip(m_prefix + "SBThumb");
@@ -575,6 +616,29 @@ namespace ChecklistGrid {
             item.checked = a_checked;
             item.partial = false;
         }
+    }
+
+    void Grid::AdjustQuantity(int a_delta) {
+        Item* item = MutableItemAt(m_cursorCol, m_cursorRow);
+        if (!item || item->quantity < 0) return;
+
+        int newVal = item->quantity + a_delta;
+        item->quantity = std::clamp(newVal, item->quantityMin, item->quantityMax);
+    }
+
+    std::unordered_map<std::string, int> Grid::GetQuantities() const {
+        std::unordered_map<std::string, int> result;
+        for (const auto& item : m_items) {
+            if (item.quantity >= 0) {
+                result[item.id] = item.quantity;
+            }
+        }
+        return result;
+    }
+
+    bool Grid::CursorHasQuantity() const {
+        const Item* item = ItemAt(m_cursorCol, m_cursorRow);
+        return item && item->quantity >= 0;
     }
 
     // --- Mouse ---

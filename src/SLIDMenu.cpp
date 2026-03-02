@@ -396,6 +396,7 @@ namespace SLIDMenu {
         logger::info("Sort complete: {} items moved", result.totalItems);
 
         BuildStagesFromNetwork();
+        RecalcPredictions();
 
         // Determine which rows changed counts
         std::set<int> flashIndices;

@@ -6,7 +6,10 @@ Intelligent storage management for Skyrim SE/AE. Create storage networks that au
 
 - **Intelligent sorting** - Items automatically route to the right containers based on customizable filters
 - **52 filters in 12 families** - Weapons, Armor, Valuables, Consumables, Books, Crafting Materials, Enchanted Items, Unique Items, and more
+- **Context Power** - One power does everything. Cast it at a container, NPC, or into the air — SLID reads the context and shows a popup menu with the right actions
 - **Whoosh** - Quick-deposit inventory items to your master chest with configurable categories
+- **Restock** - Pull potions, ammo, food, and supplies from Link storage back to you, up to quantities you configure per category. Effect-based alchemy classification works with overhaul mods and player-brewed items
+- **Whoosh & Restock** - Dump inventory and restock essentials in one action
 - **Sell automation** - Items in your sell container are automatically sold for gold on sleep/wait
 - **Vendor wholesale** - Register merchants for scheduled visits with better rates (requires Investor perk)
 - **Summoned chest** - Access your master container from anywhere with a 2-minute conjured chest
@@ -21,10 +24,21 @@ Intelligent storage management for Skyrim SE/AE. Create storage networks that au
 
 ## How It Works
 
+### The Context Power
+
+SLID gives you one power: **SLID**. Cast it, and it reads the situation:
+
+- **Looking at a container?** — Create a Link, add to a Link, set as sell, or manage it if already linked
+- **Looking at your master?** — Open, Whoosh, Sort, Sweep, Restock, Configure, or Destroy Link
+- **Looking at a vendor?** — Establish a wholesale arrangement (if eligible)
+- **Looking at nothing?** — Access all your Links with network cycling, Detect, Summon, Whoosh, Restock
+
+Destructive actions (Destroy Link, Remove) require holding the button for one second to confirm.
+
 ### Creating a Link
 
 1. Find a container you want as your master chest
-2. Cast **Create Link** while looking at it
+2. Cast **SLID** while looking at it and select **Create Link**
 3. Name your Link (defaults to the cell name)
 4. A config menu opens - assign filters to nearby containers
 5. Sort reshuffles all items across the network based on your filter configuration
@@ -35,9 +49,19 @@ Intelligent storage management for Skyrim SE/AE. Create storage networks that au
 - **Sweep** - Reverse: pull everything from linked containers back to master
 - **Whoosh** - Quick-deposit inventory items to master (configurable category selection)
 
+### Restock
+
+Pull items from Link storage back to you, up to quantities you configure per category:
+
+- **~55 categories in 15 families** — Restore, Resist, Fortify, Cure, Utility potions, Poisons, Food, Drinks, Ammo, Soul Gems, Supplies
+- **Smart classification** — Uses effect archetypes and ActorValues, not hardcoded form lists. Works with vanilla, overhaul mods, and player-brewed items
+- **Per-category quantities** — Set each category individually (e.g., 5 Restore Health, 20 Arrows)
+- **Quality-first** — Restocks strongest potions, highest-damage arrows, largest soul gems first
+- **Whoosh & Restock** — Combined action to dump inventory and restock essentials in one button
+
 ### Selling Items
 
-1. Cast **Set Sell Container** on a container
+1. Cast **SLID** on a container and select **Set as Sell**
 2. Drop items you want to sell into it
 3. Sleep or wait - SLID automatically sells items and deposits gold
 
@@ -45,7 +69,7 @@ Intelligent storage management for Skyrim SE/AE. Create storage networks that au
 
 ### Remote Access
 
-Cast **Conjure Link Chest** to summon your master container anywhere for 2 minutes with full access to Sort, Sweep, and Whoosh.
+Cast **SLID** at the air and select **Summon** to conjure your master container anywhere for 2 minutes with full access to Sort, Sweep, Whoosh, and Restock.
 
 ## Filter Families
 
@@ -63,17 +87,6 @@ Cast **Conjure Link Chest** to summon your master container anywhere for 2 minut
 | Keys | All keys |
 | Misc | Miscellaneous items |
 | Museum Needed | LOTD museum items (requires [TCC](https://www.nexusmods.com/skyrimspecialedition/mods/38529)) |
-
-## Powers
-
-SLID adds 6 lesser powers (auto-granted on game load):
-
-- **Create Link** - Designate a container as Link master and open config menu
-- **Add Container to Link** - Give a container a custom name for easy identification
-- **Remove Container from Link** - Remove a container from your Link
-- **Detect Linked Containers** - Highlight Link containers (white=master, blue=linked, orange=sell)
-- **Set Sell Container** - Designate a container for automatic selling
-- **Conjure Link Chest** - Summon your master container anywhere for 2 minutes
 
 ## Requirements
 

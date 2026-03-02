@@ -20,6 +20,11 @@ namespace ChecklistGrid {
         std::vector<int> groupChildren;     // linear indices of child items
         int groupParent = -1;               // linear index of parent (-1 = none / standalone)
         int indent = 0;                     // pixel indent for children
+
+        // Quantity field (optional — for restock-style spinners on family roots)
+        int quantity    = -1;   // -1 = no quantity shown, >= 0 = show spinner
+        int quantityMin = 0;
+        int quantityMax = 999;
     };
 
     struct Config {
@@ -92,6 +97,11 @@ namespace ChecklistGrid {
         std::unordered_set<std::string> GetCheckedIDs() const;
         void SetCheckedIDs(const std::unordered_set<std::string>& a_ids);
         void SetAll(bool a_checked);
+
+        // Quantity support (for items with quantity >= 0)
+        void AdjustQuantity(int a_delta);
+        std::unordered_map<std::string, int> GetQuantities() const;
+        bool CursorHasQuantity() const;
 
         const std::vector<Item>& GetItems() const { return m_items; }
         int GetItemCount() const { return static_cast<int>(m_items.size()); }

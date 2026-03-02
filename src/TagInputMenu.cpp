@@ -1109,7 +1109,11 @@ namespace TagInputMenu {
 
         auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(s_pendingFormID);
         if (ref) {
-            Feedback::OnTagContainer(ref);
+            if (s_pendingFormID == mgr->GetSellContainerFormID()) {
+                Feedback::OnSetSellContainer(ref);
+            } else {
+                Feedback::OnTagContainer(ref);
+            }
         }
 
         logger::info("TagInputMenu: {} {:08X} as '{}'",

@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.21)
 
 # ---- Versioning ----
 set(VERSION_MAJOR 1)
-set(VERSION_MINOR 2)
-set(VERSION_PATCH 1)
+set(VERSION_MINOR 3)
+set(VERSION_PATCH 0)
 
 # ---- Project ----
 project(
@@ -99,6 +99,11 @@ set(SOURCES
     src/TranslationService.cpp
     src/APIMessaging.cpp
     src/WelcomeMenu.cpp
+    src/ContextResolver.cpp
+    src/ContextMenu.cpp
+    src/RestockCategory.cpp
+    src/RestockConfigMenu.cpp
+    src/ButtonBar.cpp
 )
 
 set(HEADERS
@@ -142,6 +147,11 @@ set(HEADERS
     include/TranslationService.h
     include/APIMessaging.h
     src/WelcomeMenu.h
+    include/ContextResolver.h
+    src/ContextMenu.h
+    include/RestockCategory.h
+    src/RestockConfigMenu.h
+    include/ButtonBar.h
 )
 
 # ---- Create DLL ----

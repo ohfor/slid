@@ -9,6 +9,8 @@ namespace ScaleformUtil {
     constexpr uint32_t GAMEPAD_A          = 0x1000;
     constexpr uint32_t GAMEPAD_B          = 0x2000;
     constexpr uint32_t GAMEPAD_X          = 0x4000;
+    constexpr uint32_t GAMEPAD_LB         = 0x0100;
+    constexpr uint32_t GAMEPAD_RB         = 0x0200;
 
     // Drawing API helpers — stateless free functions, take movie pointer explicitly
 

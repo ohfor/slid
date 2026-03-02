@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-03-02
+
+### Added
+
+- **Unified Context Power** — All 6 Lesser Powers replaced with a single "SLID" power. Casting determines context from crosshair target and shows a popup menu with relevant actions. Master containers offer Open/Whoosh/Sort/Sweep/Configure/Destroy Link. Sell containers offer Summary/Rename/Remove. Tagged containers offer Rename/Remove. Unknown containers offer Create Link/Add to Link/Set as Sell. Casting at nothing (air) with existing Links shows all operations with network cycling. Casting at nothing with no Links fires Detect directly
+- **Hold-to-confirm actions** — Destructive actions (Destroy Link, Remove) require holding the confirm button for 1 second, preventing accidental activation. Whoosh supports tap-to-execute and hold-to-reconfigure (opens category config after holding)
+- **Restock** — Pull items from Link storage back to player up to configured quantities. 15 category families with ~55 leaf categories covering Restore (Health/Magicka/Stamina/Vampire Blood/Rare), Resist (Fire/Frost/Shock/Magic/Poison/Disease), Fortify (Combat/Magic/Stealth/Attributes/Regen/Misc), Cure (Disease/Poison), Utility (Invisibility/Waterbreathing/Waterwalking/Become Ethereal), Poisons, Food, Drinks, Ammo (Arrows/Bolts), Soul Gems (Empty), and Supplies (Torches/Firewood). Effect-based automatic classification using archetypes, ActorValues, and effect flags — works with vanilla potions, alchemy overhaul mods (power-modifier AVs 60-163), and player-brewed items. Per-network configuration via RestockConfigMenu with family/child checkboxes and quantity spinners. Quality-first sorting for ammo (damage) and soul gems (capacity); natural order for alchemy items. Opt-in exception categories for Vampire Blood and Rare Restoratives (Welkynd Stones etc.) — disabled by default to prevent depleting rare items
+- **Whoosh & Restock** — Combined context menu action that deposits inventory to master (Whoosh) then pulls configured loadout back (Restock) in a single operation
+- **Restock context menu actions** — Restock appears in master and air context menus. Tap to execute (uses saved config), hold to reconfigure (green fill, opens RestockConfigMenu). First use always opens config with defaults
+- **ChecklistGrid quantity spinners** — Grid items can optionally show editable quantity values with left/right adjustment. Used by RestockConfigMenu for per-category target counts. WhooshConfigMenu unaffected (no quantities)
+- **Restock cosave persistence** — New `RSTK` cosave record preserves per-network restock configuration across saves. V1→V2 migration included (old saves auto-convert)
+- **Restock preset export** — `GeneratePresetINI` now includes `[Preset:Name:Restock]` section with per-category quantities
+
+### Improved
+
+- **Shared ButtonBar component** — Extracted duplicated button drawing, hover, selection, hold-to-confirm, and flash code from ActionBar, RestockConfigMenu, WhooshConfigMenu, and ConfirmDialog into a single reusable `ButtonBar` class. Shared `ButtonColors` palette ensures consistent visuals across all menus. WhooshConfigMenu gains hold-to-confirm on Default and Clear buttons (matching RestockConfigMenu)
+- **RestockConfigMenu visual overhaul** — Centered "SLID: Restock Configurator" title with gold accent line and soft outer glow (matching ContextMenu). Column headers "Restock Options" and "Restock Pad" above the two panels. Context-aware guide text with 8 states adapting to keyboard vs gamepad input. Pad labels show qualified category names (e.g., "Restore: Health" vs "Fortify: Attributes: Health") to disambiguate same-named children across families
+- **Restock data model simplified** — Single `itemQuantities` map (leaf category → quantity) replaces the previous two-map design (`familyQuantities` + `enabledCategories`). Per-item quantities instead of per-family — each leaf category stores its own target count
+- Detect now shows a breakdown of container sources (e.g. "5 linked. 30 General Stores. 23 LOTD Safehouse") instead of just a total count
+
+### Changed
+
+- Existing saves: old powers automatically removed, new unified power granted on load
+
+### Fixed
+
+- Config menu Sort action did not refresh prediction counts (Keep/Pass rows lost their item counts after sorting)
+
 ## [1.2.1] - 2026-02-27
 
 ### Fixed

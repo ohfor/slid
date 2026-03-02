@@ -59,6 +59,7 @@ struct NetworkPreset {
     std::vector<PresetTag> tags;
     std::unordered_set<std::string> whooshFilters;
     bool whooshConfigured = false;
+    RestockCategory::RestockConfig restockConfig;   // optional restock preset config
     std::vector<PresetWarning> warnings;           // activation notices
 
     // Resolved at load time
@@ -95,6 +96,9 @@ public:
 
     // Whoosh configuration
     void SetWhooshConfig(const std::string& a_networkName, const std::unordered_set<std::string>& a_filters);
+
+    // Restock configuration
+    void SetRestockConfig(const std::string& a_networkName, const RestockCategory::RestockConfig& a_config);
 
     // Nuclear reset — clears everything (networks, tags, sell state, transaction log)
     void ClearAll();
@@ -175,6 +179,7 @@ private:
     void LoadSell(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
     void LoadTransactionLog(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
     void LoadContainerListState(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
+    void LoadRestockConfig(SKSE::SerializationInterface* a_intfc, uint32_t a_version);
     void Revert();
 
     // Build default empty filter list
@@ -203,4 +208,6 @@ private:
     static constexpr uint32_t kSellVersion = 1;
     static constexpr uint32_t kTlogVersion = 1;
     static constexpr uint32_t kClstVersion = 1;
+    static constexpr uint32_t kRstkRecord = 'RSTK';
+    static constexpr uint32_t kRstkVersion = 2;
 };

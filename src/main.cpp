@@ -7,6 +7,7 @@
 #include "SLIDMenu.h"
 #include "TagInputMenu.h"
 #include "WhooshConfigMenu.h"
+#include "RestockConfigMenu.h"
 #include "SalesProcessor.h"
 #include "SellOverviewMenu.h"
 #include "SummonChest.h"
@@ -16,6 +17,7 @@
 #include "TranslationService.h"
 #include "APIMessaging.h"
 #include "WelcomeMenu.h"
+#include "ContextMenu.h"
 #include "ContainerRegistry.h"
 #include "ContainerRegistryTest.h"
 
@@ -134,9 +136,10 @@ namespace {
         auto* dataHandler = RE::TESDataHandler::GetSingleton();
         if (!dataHandler) return;
 
-        // SetMaster (0x801), Tag (0x803), Deregister (0x805), Detect (0x809), SellContainer (0x816), Summon (0x818)
-        constexpr RE::FormID kBaseSpellIDs[] = {0x801, 0x803, 0x805, 0x809, 0x816};
-        constexpr RE::FormID kSummonSpellID = 0x818;
+        // All historical spell local IDs (legacy + summon) — always remove these
+        constexpr RE::FormID kLegacySpellIDs[] = {
+            0x801, 0x803, 0x805, 0x807, 0x809, 0x80B, 0x816, 0x818
+        };
         constexpr auto kPluginName = "SLID.esp"sv;
 
         auto* player = RE::PlayerCharacter::GetSingleton();
@@ -145,60 +148,40 @@ namespace {
             return;
         }
 
-        // If mod is disabled, remove all SLID powers
-        if (!Settings::bModEnabled) {
-            uint32_t removed = 0;
-            for (auto localID : kBaseSpellIDs) {
-                auto* spell = dataHandler->LookupForm<RE::SpellItem>(localID, kPluginName);
-                if (spell && player->HasSpell(spell)) {
-                    player->RemoveSpell(spell);
-                    ++removed;
-                }
-            }
-            auto* summonSpell = dataHandler->LookupForm<RE::SpellItem>(kSummonSpellID, kPluginName);
-            if (summonSpell && player->HasSpell(summonSpell)) {
-                player->RemoveSpell(summonSpell);
+        // Remove all legacy powers unconditionally
+        uint32_t removed = 0;
+        for (auto localID : kLegacySpellIDs) {
+            auto* spell = dataHandler->LookupForm<RE::SpellItem>(localID, kPluginName);
+            if (spell && player->HasSpell(spell)) {
+                player->RemoveSpell(spell);
                 ++removed;
             }
-            if (removed > 0) {
-                logger::debug("GrantPowers: removed {} powers (mod disabled)", removed);
+        }
+        if (removed > 0) {
+            logger::debug("GrantPowers: removed {} legacy powers", removed);
+        }
+
+        // Look up the unified context power by EditorID
+        auto* contextSpell = RE::TESForm::LookupByEditorID<RE::SpellItem>("SLID_ContextSPEL");
+
+        if (!Settings::bModEnabled) {
+            // Mod disabled — also remove context power if present
+            if (contextSpell && player->HasSpell(contextSpell)) {
+                player->RemoveSpell(contextSpell);
+                logger::debug("GrantPowers: removed context power (mod disabled)");
             }
             return;
         }
 
-        uint32_t added = 0;
-
-        // Always add base spells
-        for (auto localID : kBaseSpellIDs) {
-            auto* spell = dataHandler->LookupForm<RE::SpellItem>(localID, kPluginName);
-            if (!spell) {
-                logger::error("GrantPowers: form {:03X} not found in {}", localID, kPluginName);
-                continue;
-            }
-            if (!player->HasSpell(spell)) {
-                player->AddSpell(spell);
-                ++added;
-            }
+        if (!contextSpell) {
+            // ESP not yet updated with new SPEL — log and skip gracefully
+            logger::warn("GrantPowers: SLID_ContextSPEL not found in ESP (ESP not yet updated?)");
+            return;
         }
 
-        // Conditionally add/remove Summon power based on setting
-        auto* summonSpell = dataHandler->LookupForm<RE::SpellItem>(kSummonSpellID, kPluginName);
-        if (summonSpell) {
-            if (Settings::bSummonEnabled) {
-                if (!player->HasSpell(summonSpell)) {
-                    player->AddSpell(summonSpell);
-                    ++added;
-                }
-            } else {
-                if (player->HasSpell(summonSpell)) {
-                    player->RemoveSpell(summonSpell);
-                    logger::debug("GrantPowers: removed Summon power (disabled in settings)");
-                }
-            }
-        }
-
-        if (added > 0) {
-            logger::debug("GrantPowers: added {} powers to player", added);
+        if (!player->HasSpell(contextSpell)) {
+            player->AddSpell(contextSpell);
+            logger::debug("GrantPowers: granted unified context power");
         }
     }
 
@@ -234,12 +217,16 @@ namespace {
                 TagInputMenu::InputHandler::Register();
                 WhooshConfig::Menu::Register();
                 WhooshConfig::InputHandler::Register();
+                RestockConfig::Menu::Register();
+                RestockConfig::InputHandler::Register();
                 SalesProcessor::RegisterEventSinks();
                 SummonChest::RegisterEventSink();
                 SellOverview::Menu::Register();
                 SellOverview::InputHandler::Register();
                 WelcomeMenu::Menu::Register();
                 WelcomeMenu::InputHandler::Register();
+                ContextMenu::Menu::Register();
+                ContextMenu::InputHandler::Register();
                 SCIEIntegration::RegisterListener();
                 APIMessaging::Initialize();
                 break;

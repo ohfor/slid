@@ -514,6 +514,7 @@ function RenderAboutPage()
     AddHeaderOption("$SLID_HeaderLinks")
     AddTextOption("$SLID_Patreon", "patreon.com/ohfor")
     AddTextOption("$SLID_GitHub", "github.com/ohfor/slid")
+    AddTextOption("$SLID_Website", "ohfor.zone")
 
     AddEmptyOption()
 

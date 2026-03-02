@@ -96,6 +96,13 @@ namespace Distributor {
         const std::vector<PoolItem>& a_pool,
         bool a_resolveRefs);
 
+    // Restock: pull items from Link containers to player up to configured quantities.
+    // Best-first quality sorting. Returns total items moved.
+    struct RestockResult {
+        uint32_t totalItems = 0;
+    };
+    RestockResult Restock(const std::string& a_networkName);
+
     // Process sales: sell items from sell container, deposit gold.
     // Respects timer interval, batch size, and price settings from INI.
     SalesResult ProcessSales();

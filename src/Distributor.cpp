@@ -516,6 +516,147 @@ namespace Distributor {
         return movedCount;
     }
 
+    RestockResult Restock(const std::string& a_networkName) {
+        RestockResult result;
+
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* net = mgr->FindNetwork(a_networkName);
+        if (!net) {
+            logger::error("Restock: network '{}' not found", a_networkName);
+            return result;
+        }
+
+        if (!net->restockConfig.configured) {
+            return result;
+        }
+
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player) {
+            logger::error("Restock: player not available");
+            return result;
+        }
+
+        const auto& config = net->restockConfig;
+
+        // Step 1: Count player inventory per enabled restock category
+        std::unordered_map<std::string, int32_t> playerCounts;
+        {
+            auto playerInv = player->GetInventory();
+            for (auto& [item, data] : playerInv) {
+                if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
+                auto catID = RestockCategory::Classify(item);
+                if (!catID.empty() && config.itemQuantities.count(catID) > 0) {
+                    playerCounts[catID] += data.first;
+                }
+            }
+        }
+
+        // Step 2: Compute deficit per enabled category (direct lookup — each item has its own qty)
+        std::unordered_map<std::string, int32_t> deficit;
+        {
+            for (const auto& [catID, targetQty] : config.itemQuantities) {
+                int32_t target = static_cast<int32_t>(targetQty);
+                int32_t current = playerCounts.count(catID) ? playerCounts[catID] : 0;
+                int32_t need = target - current;
+                if (need > 0) {
+                    deficit[catID] = need;
+                    logger::debug("Restock: category '{}' needs {} (target={}, current={})",
+                                  catID, need, target, current);
+                }
+            }
+        }
+
+        if (deficit.empty()) {
+            logger::info("Restock: nothing needed in network '{}'", a_networkName);
+            return result;
+        }
+
+        // Step 3: Scan ALL Link containers for candidate items
+        struct Candidate {
+            RE::TESBoundObject* item;
+            int32_t count;
+            RE::TESObjectREFR* sourceRef;
+            std::string categoryID;
+            float qualityScore;
+        };
+        std::vector<Candidate> candidates;
+
+        // Collect all container FormIDs in the network
+        std::set<RE::FormID> containerIDs;
+        containerIDs.insert(net->masterFormID);
+        for (const auto& stage : net->filters) {
+            if (stage.containerFormID != 0) {
+                containerIDs.insert(stage.containerFormID);
+            }
+        }
+        if (net->catchAllFormID != 0) {
+            containerIDs.insert(net->catchAllFormID);
+        }
+        // Also include tagged containers
+        for (const auto& [formID, tag] : mgr->GetTagRegistry()) {
+            containerIDs.insert(formID);
+        }
+
+        for (auto containerID : containerIDs) {
+            auto* containerRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(containerID);
+            if (!containerRef) continue;
+
+            auto inv = containerRef->GetInventory();
+            for (auto& [item, data] : inv) {
+                if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
+
+                auto catID = RestockCategory::Classify(item);
+                if (catID.empty()) continue;
+                if (deficit.find(catID) == deficit.end()) continue;
+
+                float quality = RestockCategory::QualityScore(item, catID);
+                candidates.push_back({item, data.first, containerRef, catID, quality});
+            }
+        }
+
+        // Step 4: Sort candidates by quality descending (best first)
+        std::sort(candidates.begin(), candidates.end(),
+            [](const Candidate& a, const Candidate& b) {
+                return a.qualityScore > b.qualityScore;
+            });
+
+        // Step 5: Pull items up to deficit per category
+        struct MoveEntry {
+            RE::TESBoundObject* item;
+            int32_t count;
+            RE::TESObjectREFR* source;
+        };
+        std::vector<MoveEntry> toMove;
+
+        for (auto& cand : candidates) {
+            auto dit = deficit.find(cand.categoryID);
+            if (dit == deficit.end() || dit->second <= 0) continue;
+
+            int32_t take = std::min(cand.count, dit->second);
+            if (take <= 0) continue;
+
+            toMove.push_back({cand.item, take, cand.sourceRef});
+            dit->second -= take;
+        }
+
+        // Step 6: Execute moves
+        auto* playerRef = player->As<RE::TESObjectREFR>();
+        for (const auto& entry : toMove) {
+            logger::debug("  Restock: {}x {} from {:08X}",
+                         entry.count, entry.item->GetName(),
+                         entry.source->GetFormID());
+
+            entry.source->RemoveItem(entry.item, entry.count, RE::ITEM_REMOVE_REASON::kStoreInContainer,
+                                     nullptr, playerRef);
+            result.totalItems += entry.count;
+        }
+
+        logger::info("Restock: pulled {} items ({} stacks) in network '{}'",
+                     result.totalItems, toMove.size(), a_networkName);
+
+        return result;
+    }
+
     SalesResult ProcessSales() {
         SalesResult result;
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ButtonBar.h"
 #include "ChecklistGrid.h"
 #include "DirectionalInput.h"
 #include "ScaleformUtil.h"
@@ -24,21 +25,8 @@ namespace WhooshConfig {
     constexpr uint32_t COLOR_TITLE        = 0xFFFFFF;
     constexpr uint32_t COLOR_SUBTITLE     = 0x888888;
     constexpr uint32_t COLOR_GUIDE        = 0x888888;
-    constexpr uint32_t COLOR_BTN_NORMAL   = 0x1A1A1A;
-    constexpr uint32_t COLOR_BTN_SELECT   = 0x444444;
-    constexpr uint32_t COLOR_BTN_HOVER    = 0x2A2A2A;
-    constexpr uint32_t COLOR_BTN_LABEL    = 0xCCCCCC;
     constexpr int ALPHA_DIM        = 50;
     constexpr int ALPHA_BG         = 95;
-    constexpr int ALPHA_BTN_NORMAL = 70;
-    constexpr int ALPHA_BTN_SELECT = 90;
-    constexpr int ALPHA_BTN_HOVER  = 80;
-
-    // Button layout
-    constexpr int BTN_COUNT = 4;  // OK, Default, Clear, Cancel
-    constexpr double BTN_W = 100.0;
-    constexpr double BTN_H = 28.0;
-    constexpr double BTN_GAP = 10.0;
 
     class Menu : public RE::IMenu {
     public:
@@ -71,6 +59,7 @@ namespace WhooshConfig {
         // Mouse
         static void OnMouseMove();
         static void OnMouseDown();
+        static void CancelButtonHold();
 
     private:
         static Callback s_callback;
@@ -88,6 +77,9 @@ namespace WhooshConfig {
         // Navigation
         bool m_inGrid = false;    // start on button bar with OK selected
         int m_btnIndex = 0;       // 0=OK, 1=Default, 2=Clear, 3=Cancel
+
+        // Button bar
+        ButtonBar m_buttonBar;
 
         // Mouse hover (buttons only — grid hover handled by m_grid)
         int m_hoverBtnIndex = -1;
@@ -108,7 +100,6 @@ namespace WhooshConfig {
         double m_popupH = 0.0;
         double m_gridStartX = 0.0;
         double m_gridStartY = 0.0;
-        double m_btnStartX = 0.0;
         double m_btnY = 0.0;
         double m_guideY = 0.0;
         int    m_overlayDepth = 300;  // base depth for guide/buttons (above grid)

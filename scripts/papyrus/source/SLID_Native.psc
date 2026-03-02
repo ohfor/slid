@@ -15,6 +15,7 @@ Function RefreshPowers() global native
 Function BeginSellContainer() global native
 Function BeginSummonChest() global native
 Function DespawnSummonChest() global native
+Function BeginContextAction() global native
 Function ShowConfigMenu() global native
 Function HideConfigMenu() global native
 

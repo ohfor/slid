@@ -108,6 +108,22 @@ void NetworkManager::SetWhooshConfig(const std::string& a_networkName, const std
     logger::debug("SetWhooshConfig: network '{}' with {} filters", a_networkName, a_filters.size());
 }
 
+void NetworkManager::SetRestockConfig(const std::string& a_networkName, const RestockCategory::RestockConfig& a_config) {
+    std::lock_guard lock(m_lock);
+
+    auto* net = FindNetworkUnsafe(a_networkName);
+    if (!net) {
+        logger::warn("SetRestockConfig: network '{}' not found", a_networkName);
+        return;
+    }
+
+    net->restockConfig = a_config;
+    net->restockConfig.configured = true;
+
+    logger::debug("SetRestockConfig: network '{}' with {} items",
+                  a_networkName, a_config.itemQuantities.size());
+}
+
 void NetworkManager::ClearAll() {
     std::lock_guard lock(m_lock);
     m_networks.clear();
@@ -438,6 +454,46 @@ void NetworkManager::Save(SKSE::SerializationInterface* a_intfc) const {
 
     logger::info("Saved {} disabled container lists to cosave", disabledCount);
 
+    // Write restock config record
+    if (!a_intfc->OpenRecord(kRstkRecord, kRstkVersion)) {
+        logger::error("Failed to open RSTK cosave record");
+        return;
+    }
+
+    {
+        // Count networks that have restock configured
+        uint32_t rstkNetCount = 0;
+        for (const auto& net : m_networks) {
+            if (net.restockConfig.configured) rstkNetCount++;
+        }
+        a_intfc->WriteRecordData(&rstkNetCount, sizeof(rstkNetCount));
+
+        for (const auto& net : m_networks) {
+            if (!net.restockConfig.configured) continue;
+
+            // Network name
+            uint16_t nameLen = static_cast<uint16_t>(net.name.size());
+            a_intfc->WriteRecordData(&nameLen, sizeof(nameLen));
+            a_intfc->WriteRecordData(net.name.data(), nameLen);
+
+            // configured flag
+            uint8_t configByte = 1;
+            a_intfc->WriteRecordData(&configByte, sizeof(configByte));
+
+            // Item quantities (v2: single map, leafCategoryID → qty)
+            uint16_t itemCount = static_cast<uint16_t>(net.restockConfig.itemQuantities.size());
+            a_intfc->WriteRecordData(&itemCount, sizeof(itemCount));
+            for (const auto& [catID, qty] : net.restockConfig.itemQuantities) {
+                uint16_t idLen = static_cast<uint16_t>(catID.size());
+                a_intfc->WriteRecordData(&idLen, sizeof(idLen));
+                a_intfc->WriteRecordData(catID.data(), idLen);
+                a_intfc->WriteRecordData(&qty, sizeof(qty));
+            }
+        }
+
+        logger::info("Saved {} restock configs to cosave", rstkNetCount);
+    }
+
     // Write vendor registry record
     VendorRegistry::GetSingleton()->Save(a_intfc);
 }
@@ -466,6 +522,9 @@ void NetworkManager::Load(SKSE::SerializationInterface* a_intfc) {
                 break;
             case kClstRecord:
                 LoadContainerListState(a_intfc, version);
+                break;
+            case kRstkRecord:
+                LoadRestockConfig(a_intfc, version);
                 break;
             case VendorRegistry::kVendorRecord:
                 VendorRegistry::GetSingleton()->Load(a_intfc, version);
@@ -920,6 +979,36 @@ void NetworkManager::LoadConfigFromINI() {
                         preset->whooshFilters.insert(key);
                         preset->whooshConfigured = true;
                     }
+                } else if (currentPresetSub == "Restock") {
+                    // key = categoryID, value = quantity (for family roots) or true/false (for leaves)
+                    auto valueLower = value;
+                    std::transform(valueLower.begin(), valueLower.end(), valueLower.begin(),
+                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+                    // New format: leaf_id = quantity (direct per-item)
+                    // Old format: family_root_id = quantity (expand to children), leaf_id = true
+                    auto children = RestockCategory::GetChildren(key);
+                    if (!children.empty()) {
+                        // Family root — expand quantity to all children
+                        try {
+                            uint16_t qty = static_cast<uint16_t>(std::stoi(value));
+                            for (const auto& childID : children) {
+                                preset->restockConfig.itemQuantities[childID] = qty;
+                            }
+                            preset->restockConfig.configured = true;
+                        } catch (...) {}
+                    } else if (valueLower == "true") {
+                        // Old leaf format — presence with default qty 1
+                        preset->restockConfig.itemQuantities[key] = 1;
+                        preset->restockConfig.configured = true;
+                    } else {
+                        // New leaf format — leaf_id = quantity
+                        try {
+                            uint16_t qty = static_cast<uint16_t>(std::stoi(value));
+                            preset->restockConfig.itemQuantities[key] = qty;
+                            preset->restockConfig.configured = true;
+                        } catch (...) {}
+                    }
                 }
                 continue;
             }
@@ -1301,6 +1390,11 @@ bool NetworkManager::ActivatePreset(const std::string& a_name) {
         SetWhooshConfig(a_name, preset->whooshFilters);
     }
 
+    // Set restock config
+    if (preset->restockConfig.configured) {
+        SetRestockConfig(a_name, preset->restockConfig);
+    }
+
     logger::info("ActivatePreset: activated '{}' with {} filters, {} tags",
                  a_name, filters.size(), preset->tags.size());
     return true;
@@ -1605,4 +1699,101 @@ void NetworkManager::LoadContainerListState(SKSE::SerializationInterface* a_intf
     }
 
     logger::info("Loaded {} disabled container lists from cosave", m_disabledContainerLists.size());
+}
+
+void NetworkManager::LoadRestockConfig(SKSE::SerializationInterface* a_intfc, uint32_t a_version) {
+    if (a_version > kRstkVersion) {
+        logger::warn("RSTK cosave version {} is newer than supported {}, skipping",
+                     a_version, kRstkVersion);
+        return;
+    }
+
+    uint32_t netCount = 0;
+    a_intfc->ReadRecordData(&netCount, sizeof(netCount));
+
+    uint32_t matched = 0;
+    for (uint32_t i = 0; i < netCount; ++i) {
+        // Network name
+        uint16_t nameLen = 0;
+        a_intfc->ReadRecordData(&nameLen, sizeof(nameLen));
+        std::string netName(nameLen, '\0');
+        a_intfc->ReadRecordData(netName.data(), nameLen);
+
+        // configured flag
+        uint8_t configByte = 0;
+        a_intfc->ReadRecordData(&configByte, sizeof(configByte));
+
+        RestockCategory::RestockConfig config;
+        config.configured = (configByte != 0);
+
+        if (a_version == 1) {
+            // V1 migration: read old familyQuantities + enabledCategories, convert to itemQuantities
+            std::map<std::string, uint16_t> famQty;
+            uint16_t famCount = 0;
+            a_intfc->ReadRecordData(&famCount, sizeof(famCount));
+            for (uint16_t f = 0; f < famCount; ++f) {
+                uint16_t idLen = 0;
+                a_intfc->ReadRecordData(&idLen, sizeof(idLen));
+                std::string famID(idLen, '\0');
+                a_intfc->ReadRecordData(famID.data(), idLen);
+                uint16_t qty = 0;
+                a_intfc->ReadRecordData(&qty, sizeof(qty));
+                famQty[famID] = qty;
+            }
+
+            uint16_t enabledCount = 0;
+            a_intfc->ReadRecordData(&enabledCount, sizeof(enabledCount));
+            for (uint16_t e = 0; e < enabledCount; ++e) {
+                uint16_t idLen = 0;
+                a_intfc->ReadRecordData(&idLen, sizeof(idLen));
+                std::string catID(idLen, '\0');
+                a_intfc->ReadRecordData(catID.data(), idLen);
+
+                // Migrate: each enabled leaf gets its family's quantity
+                // Skip family root IDs — only leaf IDs belong in itemQuantities
+                if (RestockCategory::IsFamilyRoot(catID)) {
+                    logger::warn("RSTK: v1 migration skipping family root '{}' in enabledCategories", catID);
+                    continue;
+                }
+                const auto& allCats = RestockCategory::GetAllCategories();
+                std::string familyID;
+                for (const auto& cat : allCats) {
+                    if (cat.id == catID) {
+                        familyID = cat.parentID.empty() ? cat.id : cat.parentID;
+                        break;
+                    }
+                }
+                auto qit = famQty.find(familyID);
+                uint16_t qty = (qit != famQty.end()) ? qit->second : 1;
+                config.itemQuantities[catID] = qty;
+                logger::debug("RSTK: v1 migrated '{}' (family='{}') qty={}", catID, familyID, qty);
+            }
+
+            logger::info("RSTK: migrated v1 config for '{}' ({} items)", netName, config.itemQuantities.size());
+        } else {
+            // V2: read itemQuantities directly
+            uint16_t itemCount = 0;
+            a_intfc->ReadRecordData(&itemCount, sizeof(itemCount));
+            for (uint16_t f = 0; f < itemCount; ++f) {
+                uint16_t idLen = 0;
+                a_intfc->ReadRecordData(&idLen, sizeof(idLen));
+                std::string catID(idLen, '\0');
+                a_intfc->ReadRecordData(catID.data(), idLen);
+                uint16_t qty = 0;
+                a_intfc->ReadRecordData(&qty, sizeof(qty));
+                config.itemQuantities[catID] = qty;
+            }
+        }
+
+        // Match to existing network
+        auto* net = FindNetworkUnsafe(netName);
+        if (net) {
+            net->restockConfig = std::move(config);
+            matched++;
+        } else {
+            logger::debug("RSTK: skipping unknown network '{}'", netName);
+        }
+    }
+
+    logger::info("Loaded restock config for {}/{} networks from cosave", matched, netCount);
 }

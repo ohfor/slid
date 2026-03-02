@@ -1,4 +1,5 @@
 #include "WhooshConfigMenu.h"
+#include "ButtonBar.h"
 #include "FilterRegistry.h"
 #include "ScaleformUtil.h"
 #include "TranslationService.h"
@@ -63,8 +64,17 @@ namespace WhooshConfig {
     RE::UI_MESSAGE_RESULTS Menu::ProcessMessage(RE::UIMessage& a_message) {
         using Message = RE::UI_MESSAGE_TYPE;
         switch (*a_message.type) {
+            case Message::kUpdate:
+                if (m_buttonBar.IsHolding()) {
+                    m_buttonBar.UpdateHold();
+                    int completed = m_buttonBar.CompletedHold();
+                    if (completed == 1) SetDefault();
+                    else if (completed == 2) ClearAll();
+                }
+                return RE::UI_MESSAGE_RESULTS::kHandled;
             case Message::kHide:
                 if (g_activeMenu) {
+                    g_activeMenu->m_buttonBar.Destroy();
                     g_activeMenu->m_grid.Destroy();
                 }
                 g_activeMenu = nullptr;
@@ -245,8 +255,14 @@ namespace WhooshConfig {
 
         // Buttons
         m_btnY = m_popupY + m_popupH - 44.0;
-        double totalBtnW = BTN_COUNT * BTN_W + (BTN_COUNT - 1) * BTN_GAP;
-        m_btnStartX = m_popupX + (m_popupW - totalBtnW) / 2.0;
+        m_buttonBar.Init(uiMovie.get(), "_wcBtn", m_overlayDepth + 10,
+            {
+                {T("$SLID_OK"),             100.0},
+                {T("$SLID_WhooshDefault"),  100.0, "", true, ButtonColors::HOLD_BLUE, 80, 1.0f},
+                {T("$SLID_WhooshClear"),    100.0, "", true, ButtonColors::HOLD_RED, 80, 1.0f},
+                {T("$SLID_Cancel"),         100.0}
+            },
+            m_popupX + m_popupW / 2.0, m_btnY);
 
         DrawButtons();
     }
@@ -274,47 +290,9 @@ namespace WhooshConfig {
     }
 
     void Menu::DrawButtons() {
-        std::string btnLabels[BTN_COUNT] = {
-            T("$SLID_OK"),
-            T("$SLID_WhooshDefault"),
-            T("$SLID_WhooshClear"),
-            T("$SLID_Cancel")
-        };
-
-        for (int i = 0; i < BTN_COUNT; ++i) {
-            double bx = m_btnStartX + i * (BTN_W + BTN_GAP);
-
-            bool selected = (!m_inGrid && m_btnIndex == i);
-            bool hovered = (m_hoverBtnIndex == i);
-
-            uint32_t bgColor = selected ? COLOR_BTN_SELECT : (hovered ? COLOR_BTN_HOVER : COLOR_BTN_NORMAL);
-            int bgAlpha = selected ? ALPHA_BTN_SELECT : (hovered ? ALPHA_BTN_HOVER : ALPHA_BTN_NORMAL);
-
-            std::string bgName = "_wcBtn" + std::to_string(i);
-            ScaleformUtil::DrawFilledRect(uiMovie.get(),bgName.c_str(), m_overlayDepth + 10 + i, bx, m_btnY, BTN_W, BTN_H, bgColor, bgAlpha);
-
-            std::string lblName = "_wcBtnLbl" + std::to_string(i);
-            ScaleformUtil::CreateLabel(uiMovie.get(),lblName.c_str(), m_overlayDepth + 20 + i, bx, m_btnY + 4.0,
-                       BTN_W, BTN_H, btnLabels[i].c_str(), 13, COLOR_BTN_LABEL);
-
-            // Center-align button text
-            std::string lblPath = std::string("_root.") + lblName;
-            RE::GFxValue tf;
-            uiMovie->GetVariable(&tf, lblPath.c_str());
-            if (!tf.IsUndefined()) {
-                RE::GFxValue alignFmt;
-                uiMovie->CreateObject(&alignFmt, "TextFormat");
-                if (!alignFmt.IsUndefined()) {
-                    RE::GFxValue alignVal;
-                    alignVal.SetString("center");
-                    alignFmt.SetMember("align", alignVal);
-                    RE::GFxValue fmtArgs[1];
-                    fmtArgs[0] = alignFmt;
-                    tf.Invoke("setTextFormat", nullptr, fmtArgs, 1);
-                    tf.Invoke("setNewTextFormat", nullptr, fmtArgs, 1);
-                }
-            }
-        }
+        m_buttonBar.Draw(
+            (!m_inGrid) ? m_btnIndex : -1,
+            m_hoverBtnIndex);
     }
 
     void Menu::UpdateButtons() {
@@ -373,7 +351,8 @@ namespace WhooshConfig {
             menu.m_grid.NavigateLeft();
             menu.m_grid.Update();
         } else {
-            menu.m_btnIndex = (menu.m_btnIndex > 0) ? menu.m_btnIndex - 1 : BTN_COUNT - 1;
+            menu.m_buttonBar.CancelHold();
+            menu.m_btnIndex = (menu.m_btnIndex > 0) ? menu.m_btnIndex - 1 : menu.m_buttonBar.Count() - 1;
         }
         menu.UpdateButtons();
         menu.UpdateGuideText();
@@ -387,7 +366,8 @@ namespace WhooshConfig {
             menu.m_grid.NavigateRight();
             menu.m_grid.Update();
         } else {
-            menu.m_btnIndex = (menu.m_btnIndex < BTN_COUNT - 1) ? menu.m_btnIndex + 1 : 0;
+            menu.m_buttonBar.CancelHold();
+            menu.m_btnIndex = (menu.m_btnIndex < menu.m_buttonBar.Count() - 1) ? menu.m_btnIndex + 1 : 0;
         }
         menu.UpdateButtons();
         menu.UpdateGuideText();
@@ -401,8 +381,10 @@ namespace WhooshConfig {
             // In button bar — activate the button
             switch (menu.m_btnIndex) {
                 case 0: Confirm(); break;
-                case 1: SetDefault(); break;
-                case 2: ClearAll(); break;
+                case 1:  // Default — hold-to-confirm
+                case 2:  // Clear — hold-to-confirm
+                    if (!menu.m_buttonBar.IsHolding()) menu.m_buttonBar.StartHold(menu.m_btnIndex);
+                    break;
                 case 3: Cancel(); break;
             }
             return;
@@ -470,13 +452,7 @@ namespace WhooshConfig {
         }
 
         // Button hover
-        menu.m_hoverBtnIndex = -1;
-        for (int i = 0; i < BTN_COUNT; ++i) {
-            double bx = menu.m_btnStartX + i * (BTN_W + BTN_GAP);
-            if (mx >= bx && mx < bx + BTN_W && my >= menu.m_btnY && my < menu.m_btnY + BTN_H) {
-                menu.m_hoverBtnIndex = i;
-            }
-        }
+        menu.m_hoverBtnIndex = menu.m_buttonBar.HitTest(mx, my);
 
         if (menu.m_hoverBtnIndex != oldHoverBtn) {
             menu.UpdateButtons();
@@ -498,18 +474,22 @@ namespace WhooshConfig {
         }
 
         // Button click
-        for (int i = 0; i < BTN_COUNT; ++i) {
-            double bx = menu.m_btnStartX + i * (BTN_W + BTN_GAP);
-            if (mx >= bx && mx < bx + BTN_W && my >= menu.m_btnY && my < menu.m_btnY + BTN_H) {
-                switch (i) {
-                    case 0: Confirm(); break;
-                    case 1: SetDefault(); break;
-                    case 2: ClearAll(); break;
-                    case 3: Cancel(); break;
-                }
-                return;
+        int hitBtn = menu.m_buttonBar.HitTest(mx, my);
+        if (hitBtn >= 0) {
+            switch (hitBtn) {
+                case 0: Confirm(); break;
+                case 1:  // Default — hold-to-confirm
+                case 2:  // Clear — hold-to-confirm
+                    if (!menu.m_buttonBar.IsHolding()) menu.m_buttonBar.StartHold(hitBtn);
+                    break;
+                case 3: Cancel(); break;
             }
+            return;
         }
+    }
+
+    void Menu::CancelButtonHold() {
+        if (g_activeMenu) g_activeMenu->m_buttonBar.CancelHold();
     }
 
     // --- InputHandler ---
@@ -574,8 +554,9 @@ namespace WhooshConfig {
 
             // Mouse button
             if (device == RE::INPUT_DEVICE::kMouse) {
-                if (key == 0 && isDown) {  // Left click
-                    Menu::OnMouseDown();
+                if (key == 0) {
+                    if (isDown) Menu::OnMouseDown();
+                    else if (isUp) Menu::CancelButtonHold();
                 }
                 continue;
             }
@@ -591,12 +572,17 @@ namespace WhooshConfig {
                     }
                     continue;
                 }
-                // Horizontal D-pad + action buttons: edge-only
+                // Horizontal D-pad: edge-only
+                if (key == ScaleformUtil::GAMEPAD_DPAD_LEFT && isDown) { Menu::NavigateLeft(); continue; }
+                if (key == ScaleformUtil::GAMEPAD_DPAD_RIGHT && isDown) { Menu::NavigateRight(); continue; }
+                // Gamepad A: hold support for Default/Clear buttons
+                if (key == ScaleformUtil::GAMEPAD_A) {
+                    if (isDown) Menu::ToggleCheck();
+                    else if (isUp) Menu::CancelButtonHold();
+                    continue;
+                }
                 if (!isDown) continue;
                 switch (key) {
-                    case ScaleformUtil::GAMEPAD_DPAD_LEFT:  Menu::NavigateLeft(); break;
-                    case ScaleformUtil::GAMEPAD_DPAD_RIGHT: Menu::NavigateRight(); break;
-                    case ScaleformUtil::GAMEPAD_A:          Menu::ToggleCheck(); break;
                     case ScaleformUtil::GAMEPAD_B:          Menu::Cancel(); break;
                 }
                 continue;
@@ -614,13 +600,17 @@ namespace WhooshConfig {
                     }
                     continue;
                 }
-                // Horizontal + action keys: edge-only
+                // Horizontal: edge-only
+                if (key == Key::kLeft && isDown) { Menu::NavigateLeft(); continue; }
+                if (key == Key::kRight && isDown) { Menu::NavigateRight(); continue; }
+                // Enter/Space: hold support for Default/Clear buttons
+                if (key == Key::kEnter || key == Key::kSpacebar) {
+                    if (isDown) Menu::ToggleCheck();
+                    else if (isUp) Menu::CancelButtonHold();
+                    continue;
+                }
                 if (!isDown) continue;
                 switch (key) {
-                    case Key::kLeft:     Menu::NavigateLeft(); break;
-                    case Key::kRight:    Menu::NavigateRight(); break;
-                    case Key::kEnter:    Menu::ToggleCheck(); break;
-                    case Key::kSpacebar: Menu::ToggleCheck(); break;
                     case Key::kEscape:   Menu::Cancel(); break;
                 }
                 continue;

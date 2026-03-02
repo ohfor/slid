@@ -4,7 +4,6 @@
 #include "UIHelper.h"
 #include "SLIDMenu.h"
 #include "SellOverviewMenu.h"
-#include "SummonChest.h"
 #include "Distributor.h"
 #include "WhooshConfigMenu.h"
 #include "FilterRegistry.h"
@@ -255,66 +254,13 @@ namespace ActivationHook {
             auto networkName = mgr->FindNetworkByMaster(thisID);
             bool isMaster = !networkName.empty();
             bool isSell = (thisID == mgr->GetSellContainerFormID());
-            bool isSummon = SummonChest::IsSummonedChest(thisID);
 
-            if (!isMaster && !isSell && !isSummon) {
+            if (!isMaster && !isSell) {
                 return _originalActivateRef(a_this, a_activator, a_arg2, a_object, a_count, a_defaultProcessingOnly);
             }
 
             auto containerID = thisID;
             auto activatorID = a_activator->GetFormID();
-
-            if (isSummon) {
-                auto summonNetwork = SummonChest::GetNetworkName();
-                logger::info("ActivateRef hook: intercepted summoned chest {:08X} for network '{}'",
-                            thisID, summonNetwork);
-
-                SKSE::GetTaskInterface()->AddTask([summonNetwork, activatorID]() {
-                    UIHelper::ShowMessageBox(T("$SLID_MsgLinkPrefix") + summonNetwork, {T("$SLID_MsgOpen"), T("$SLID_MsgWhoosh"), T("$SLID_MsgAccessLink"), T("$SLID_MsgDismiss")},
-                        [summonNetwork, activatorID](int idx) {
-                            if (idx == 0) {
-                                // Open master directly — no gather, no auto-sort
-                                auto* mgr = NetworkManager::GetSingleton();
-                                auto* net = mgr->FindNetwork(summonNetwork);
-                                if (!net) return;
-                                auto masterID = net->masterFormID;
-
-                                SKSE::GetTaskInterface()->AddTask([masterID, activatorID]() {
-                                    auto* master = RE::TESForm::LookupByID<RE::TESObjectREFR>(masterID);
-                                    auto* activator = RE::TESForm::LookupByID<RE::TESObjectREFR>(activatorID);
-                                    if (master && activator) {
-                                        SetBypass(masterID);
-                                        master->ActivateRef(activator, 0, nullptr, 0, false);
-                                    }
-                                });
-                            } else if (idx == 1) {
-                                SKSE::GetTaskInterface()->AddTask([summonNetwork]() {
-                                    ExecuteWhoosh(summonNetwork);
-                                });
-                            } else if (idx == 2) {
-                                SKSE::GetTaskInterface()->AddTask([summonNetwork]() {
-                                    SLIDMenu::ConfigMenu::Show(summonNetwork);
-                                });
-                            } else {
-                                // Dispel the summon effect — triggers OnEffectFinish → DespawnSummonChest
-                                SKSE::GetTaskInterface()->AddTask([]() {
-                                    auto* player = RE::PlayerCharacter::GetSingleton();
-                                    auto* dh = RE::TESDataHandler::GetSingleton();
-                                    if (!player || !dh) return;
-
-                                    constexpr RE::FormID kSummonSPEL = 0x818;
-                                    auto* spell = dh->LookupForm<RE::SpellItem>(kSummonSPEL, "SLID.esp"sv);
-                                    if (spell) {
-                                        auto handle = player->GetHandle();
-                                        player->AsMagicTarget()->DispelEffect(spell, handle);
-                                    }
-                                });
-                            }
-                        });
-                });
-
-                return true;
-            }
 
             if (isSell) {
                 // Sell container only — 2-option MessageBox

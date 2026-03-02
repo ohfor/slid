@@ -16,8 +16,8 @@ namespace ConfirmDialog {
     static double s_popupY = 0.0;
     static double s_popupH = 0.0;
 
-    // Dynamic button positions (computed in Draw)
-    static std::vector<double> s_btnXPositions;
+    // ButtonBar instance
+    static ButtonBar s_bar;
 
     // Layout constants (internal)
     static constexpr double POPUP_H_2BTN = 94.0;
@@ -27,7 +27,6 @@ namespace ConfirmDialog {
     static constexpr double BTN_H      = 26.0;
     static constexpr double BTN_Y_OFF_2BTN  = 54.0;  // button Y offset from popup top
     static constexpr double BTN_Y_OFF_MULTI = 72.0;  // more room for 2-line title
-    static constexpr double BTN_GAP    = 12.0;
     static constexpr double TITLE_PAD  = 12.0;
     static constexpr double TITLE_H_2BTN  = 28.0;
     static constexpr double TITLE_H_MULTI = 48.0;    // taller for 2-line titles
@@ -35,20 +34,13 @@ namespace ConfirmDialog {
     // Colors (shared with SLIDMenu palette)
     static constexpr uint32_t COLOR_BG        = 0x0A0A0A;
     static constexpr uint32_t COLOR_BORDER    = 0x666666;
-    static constexpr uint32_t COLOR_BTN_NORM  = 0x1A1A1A;
-    static constexpr uint32_t COLOR_BTN_SEL   = 0x444444;
-    static constexpr uint32_t COLOR_BTN_HOVER = 0x2A2A2A;
     static constexpr int ALPHA_DIM            = 50;
-    static constexpr int ALPHA_BTN_NORM       = 70;
-    static constexpr int ALPHA_BTN_SEL        = 90;
-    static constexpr int ALPHA_BTN_HOVER      = 80;
 
     // Scaleform clip names
     static constexpr const char* CLIP_DIM    = "_cdDim";
     static constexpr const char* CLIP_BG     = "_cdBg";
     static constexpr const char* CLIP_BORDER = "_cdBorder";
     static constexpr const char* CLIP_TITLE  = "_cdTitle";
-    // Buttons use dynamic names: _cdBtn0, _cdBtn1, etc.
 
     // --- Forward declarations ---
     static void Draw();
@@ -75,10 +67,6 @@ namespace ConfirmDialog {
 
     static double BtnY() {
         return s_popupY + GetBtnYOff();
-    }
-
-    static std::string BtnClipName(int a_index) {
-        return std::string("_cdBtn") + std::to_string(a_index);
     }
 
     // --- Public API ---
@@ -153,20 +141,7 @@ namespace ConfirmDialog {
 
     int HitTest(float a_mx, float a_my) {
         if (!s_open) return -1;
-
-        double btnY = BtnY();
-        if (a_my < btnY || a_my > btnY + BTN_H) return -1;
-
-        double btnW = GetBtnW();
-        int count = ButtonCount();
-        for (int i = 0; i < count; i++) {
-            if (i < static_cast<int>(s_btnXPositions.size())) {
-                double bx = s_btnXPositions[i];
-                if (a_mx >= bx && a_mx <= bx + btnW) return i;
-            }
-        }
-
-        return -1;
+        return s_bar.HitTest(a_mx, a_my);
     }
 
     void UpdateHover(int a_btnIndex) {
@@ -185,10 +160,6 @@ namespace ConfirmDialog {
 
     static void Draw() {
         if (!s_movie) return;
-
-        RE::GFxValue root;
-        s_movie->GetVariable(&root, "_root");
-        if (root.IsUndefined()) return;
 
         int count = ButtonCount();
         double btnW = GetBtnW();
@@ -235,71 +206,16 @@ namespace ConfirmDialog {
             }
         }
 
-        // Compute button X positions (centered as a group)
-        double totalBtnW = count * btnW + (count - 1) * BTN_GAP;
-        double startX = s_popupX + (s_config.popupW - totalBtnW) / 2.0;
-        s_btnXPositions.clear();
-        s_btnXPositions.reserve(count);
-        for (int i = 0; i < count; i++) {
-            s_btnXPositions.push_back(startX + i * (btnW + BTN_GAP));
+        // Build ButtonBar from dynamic button list
+        std::vector<ButtonDef> defs;
+        defs.reserve(count);
+        for (int i = 0; i < count; ++i) {
+            defs.push_back({s_config.buttons[i], btnW});
         }
 
         double btnY = BtnY();
-
-        // Create button clips
-        for (int i = 0; i < count; i++) {
-            std::string clipName = BtnClipName(i);
-            int depth = 504 + i;
-
-            RE::GFxValue clip;
-            RE::GFxValue args[2];
-            args[0].SetString(clipName.c_str());
-            args[1].SetNumber(static_cast<double>(depth));
-            root.Invoke("createEmptyMovieClip", &clip, args, 2);
-            if (clip.IsUndefined()) continue;
-
-            RE::GFxValue px, py;
-            px.SetNumber(s_btnXPositions[i]); py.SetNumber(btnY);
-            clip.SetMember("_x", px);
-            clip.SetMember("_y", py);
-
-            // Background child clip
-            RE::GFxValue bg;
-            RE::GFxValue bgArgs[2];
-            bgArgs[0].SetString("_bg"); bgArgs[1].SetNumber(1.0);
-            clip.Invoke("createEmptyMovieClip", &bg, bgArgs, 2);
-
-            // Label text field
-            RE::GFxValue tfArgs[6];
-            tfArgs[0].SetString("_label"); tfArgs[1].SetNumber(10.0);
-            tfArgs[2].SetNumber(0.0); tfArgs[3].SetNumber(3.0);
-            tfArgs[4].SetNumber(btnW); tfArgs[5].SetNumber(BTN_H - 3.0);
-            clip.Invoke("createTextField", nullptr, tfArgs, 6);
-
-            std::string labelPath = std::string("_root.") + clipName + "._label";
-            ScaleformUtil::SetTextFieldFormat(s_movie, labelPath, 14, 0xCCCCCC);
-
-            // Center-align label
-            RE::GFxValue labelTF;
-            s_movie->GetVariable(&labelTF, labelPath.c_str());
-            if (!labelTF.IsUndefined()) {
-                RE::GFxValue alignFmt;
-                s_movie->CreateObject(&alignFmt, "TextFormat");
-                if (!alignFmt.IsUndefined()) {
-                    RE::GFxValue alignVal;
-                    alignVal.SetString("center");
-                    alignFmt.SetMember("align", alignVal);
-                    RE::GFxValue fmtArgs[1];
-                    fmtArgs[0] = alignFmt;
-                    labelTF.Invoke("setTextFormat", nullptr, fmtArgs, 1);
-                    labelTF.Invoke("setNewTextFormat", nullptr, fmtArgs, 1);
-                }
-            }
-
-            RE::GFxValue textVal;
-            textVal.SetString(s_config.buttons[i].c_str());
-            s_movie->SetVariable((labelPath + ".text").c_str(), textVal);
-        }
+        s_bar.Init(s_movie, "_cdBtn", 504, defs,
+                   s_popupX + s_config.popupW / 2.0, btnY);
 
         Redraw();
     }
@@ -307,61 +223,13 @@ namespace ConfirmDialog {
     // --- Internal: Redraw button highlights only ---
 
     static void Redraw() {
-        if (!s_movie) return;
-
-        int count = ButtonCount();
-        double btnW = GetBtnW();
-
-        for (int i = 0; i < count; i++) {
-            std::string clipPath = std::string("_root.") + BtnClipName(i);
-            RE::GFxValue clip;
-            s_movie->GetVariable(&clip, clipPath.c_str());
-            if (clip.IsUndefined()) continue;
-
-            RE::GFxValue bg;
-            clip.GetMember("_bg", &bg);
-            if (bg.IsUndefined()) continue;
-
-            bg.Invoke("clear", nullptr, nullptr, 0);
-
-            uint32_t color = COLOR_BTN_NORM;
-            int alpha = ALPHA_BTN_NORM;
-            if (i == s_selectedIndex) {
-                color = COLOR_BTN_SEL;
-                alpha = ALPHA_BTN_SEL;
-            } else if (i == s_hoverIndex) {
-                color = COLOR_BTN_HOVER;
-                alpha = ALPHA_BTN_HOVER;
-            }
-
-            RE::GFxValue fillArgs[2];
-            fillArgs[0].SetNumber(static_cast<double>(color));
-            fillArgs[1].SetNumber(static_cast<double>(alpha));
-            bg.Invoke("beginFill", nullptr, fillArgs, 2);
-
-            RE::GFxValue pt[2];
-            pt[0].SetNumber(0.0); pt[1].SetNumber(0.0);
-            bg.Invoke("moveTo", nullptr, pt, 2);
-            pt[0].SetNumber(btnW);
-            bg.Invoke("lineTo", nullptr, pt, 2);
-            pt[1].SetNumber(BTN_H);
-            bg.Invoke("lineTo", nullptr, pt, 2);
-            pt[0].SetNumber(0.0);
-            bg.Invoke("lineTo", nullptr, pt, 2);
-            pt[1].SetNumber(0.0);
-            bg.Invoke("lineTo", nullptr, pt, 2);
-
-            bg.Invoke("endFill", nullptr, nullptr, 0);
-        }
+        s_bar.Draw(s_selectedIndex, s_hoverIndex);
     }
 
     // --- Internal: Destroy all Scaleform clips ---
 
     static void Destroy() {
         if (!s_movie) return;
-
-        RE::GFxValue root;
-        s_movie->GetVariable(&root, "_root");
 
         // Fixed clips
         const char* fixedClips[] = {CLIP_DIM, CLIP_BG, CLIP_BORDER};
@@ -380,17 +248,7 @@ namespace ConfirmDialog {
             titleTF.Invoke("removeTextField", nullptr, nullptr, 0);
         }
 
-        // Dynamic button clips
-        int count = ButtonCount();
-        for (int i = 0; i < count; i++) {
-            std::string clipPath = std::string("_root.") + BtnClipName(i);
-            RE::GFxValue clip;
-            s_movie->GetVariable(&clip, clipPath.c_str());
-            if (!clip.IsUndefined()) {
-                clip.Invoke("removeMovieClip", nullptr, nullptr, 0);
-            }
-        }
-
-        s_btnXPositions.clear();
+        // Button bar cleanup
+        s_bar.Destroy();
     }
 }
