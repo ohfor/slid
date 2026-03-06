@@ -2,6 +2,35 @@
 
 namespace ScaleformUtil {
 
+    const char* GetFont() {
+        static const char* cached = nullptr;
+        if (cached) return cached;
+
+        std::string language = "ENGLISH";
+        auto* ini = RE::INISettingCollection::GetSingleton();
+        if (ini) {
+            auto* setting = ini->GetSetting("sLanguage:General");
+            if (setting && setting->GetType() == RE::Setting::Type::kString) {
+                const char* val = setting->GetString();
+                if (val && val[0]) {
+                    language = val;
+                    // Uppercase for comparison
+                    for (auto& c : language) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+                }
+            }
+        }
+
+        if (language == "JAPANESE" || language == "KOREAN" ||
+            language == "SCHINESE"  || language == "TCHINESE") {
+            cached = "Noto Sans CJK SC Regular";
+        } else {
+            cached = "Noto Sans";
+        }
+
+        logger::info("ScaleformUtil: Game language '{}' → font '{}'", language, cached);
+        return cached;
+    }
+
     void DrawFilledRect(RE::GFxMovieView* a_movie, const char* a_name, int a_depth,
                         double a_x, double a_y, double a_w, double a_h,
                         uint32_t a_color, int a_alpha) {
@@ -103,11 +132,13 @@ namespace ScaleformUtil {
         a_movie->GetVariable(&root, "_root");
         if (root.IsUndefined()) return;
 
+        double correctedY = a_y - TextYCorrection(a_size);
+
         RE::GFxValue tfArgs[6];
         tfArgs[0].SetString(a_name);
         tfArgs[1].SetNumber(static_cast<double>(a_depth));
         tfArgs[2].SetNumber(a_x);
-        tfArgs[3].SetNumber(a_y);
+        tfArgs[3].SetNumber(correctedY);
         tfArgs[4].SetNumber(a_w);
         tfArgs[5].SetNumber(a_h);
         root.Invoke("createTextField", nullptr, tfArgs, 6);
@@ -122,7 +153,7 @@ namespace ScaleformUtil {
         a_movie->CreateObject(&fmt, "TextFormat");
         if (!fmt.IsUndefined()) {
             RE::GFxValue fontVal, sizeVal, colorVal;
-            fontVal.SetString("Arial");
+            fontVal.SetString(GetFont());
             fmt.SetMember("font", fontVal);
             sizeVal.SetNumber(static_cast<double>(a_size));
             fmt.SetMember("size", sizeVal);
@@ -164,7 +195,7 @@ namespace ScaleformUtil {
         if (textFormat.IsUndefined()) {
             RE::GFxValue fontVal, sizeVal, colorVal, embedVal;
 
-            fontVal.SetString("Arial");
+            fontVal.SetString(GetFont());
             textField.SetMember("font", fontVal);
 
             sizeVal.SetNumber(static_cast<double>(a_size));
@@ -179,7 +210,7 @@ namespace ScaleformUtil {
         }
 
         RE::GFxValue fontVal, sizeVal, colorVal;
-        fontVal.SetString("Arial");
+        fontVal.SetString(GetFont());
         textFormat.SetMember("font", fontVal);
         sizeVal.SetNumber(static_cast<double>(a_size));
         textFormat.SetMember("size", sizeVal);

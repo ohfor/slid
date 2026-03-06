@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.21)
 # ---- Versioning ----
 set(VERSION_MAJOR 1)
 set(VERSION_MINOR 3)
-set(VERSION_PATCH 0)
+set(VERSION_PATCH 1)
 
 # ---- Project ----
 project(
@@ -99,6 +99,7 @@ set(SOURCES
     src/TranslationService.cpp
     src/APIMessaging.cpp
     src/WelcomeMenu.cpp
+    src/FontTestMenu.cpp
     src/ContextResolver.cpp
     src/ContextMenu.cpp
     src/RestockCategory.cpp
@@ -147,6 +148,7 @@ set(HEADERS
     include/TranslationService.h
     include/APIMessaging.h
     src/WelcomeMenu.h
+    src/FontTestMenu.h
     include/ContextResolver.h
     src/ContextMenu.h
     include/RestockCategory.h

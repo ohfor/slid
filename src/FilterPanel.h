@@ -168,6 +168,7 @@ namespace FilterPanel {
 
     // --- Origin panel data ---
     int GetPredictedOriginCount();
+    void SetPredictedOriginCount(int a_count);
     int GetCurrentOriginCount();
 
 }

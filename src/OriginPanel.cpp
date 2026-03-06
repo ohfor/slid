@@ -56,23 +56,26 @@ namespace OriginPanel {
         s_clip.SetMember("_y", posY);
 
         // nameText — label ("Origin")
+        double nameY = 5.0 - ScaleformUtil::TextYCorrection(15);
         RE::GFxValue nameArgs[6];
         nameArgs[0].SetString("nameText"); nameArgs[1].SetNumber(11.0);
-        nameArgs[2].SetNumber(COL_FILTER_X); nameArgs[3].SetNumber(5.0);
+        nameArgs[2].SetNumber(COL_FILTER_X); nameArgs[3].SetNumber(nameY);
         nameArgs[4].SetNumber(COL_FILTER_W); nameArgs[5].SetNumber(24.0);
         s_clip.Invoke("createTextField", nullptr, nameArgs, 6);
 
         // containerText — master chest name
+        double contY = 5.0 - ScaleformUtil::TextYCorrection(14);
         RE::GFxValue contArgs[6];
         contArgs[0].SetString("containerText"); contArgs[1].SetNumber(13.0);
-        contArgs[2].SetNumber(COL_CONTAINER_X); contArgs[3].SetNumber(5.0);
+        contArgs[2].SetNumber(COL_CONTAINER_X); contArgs[3].SetNumber(contY);
         contArgs[4].SetNumber(COL_CONTAINER_W); contArgs[5].SetNumber(24.0);
         s_clip.Invoke("createTextField", nullptr, contArgs, 6);
 
         // countText — item count
+        double cntY = 6.0 - ScaleformUtil::TextYCorrection(14);
         RE::GFxValue cntArgs[6];
         cntArgs[0].SetString("countText"); cntArgs[1].SetNumber(12.0);
-        cntArgs[2].SetNumber(COL_ITEMS_X); cntArgs[3].SetNumber(6.0);
+        cntArgs[2].SetNumber(COL_ITEMS_X); cntArgs[3].SetNumber(cntY);
         cntArgs[4].SetNumber(COL_ITEMS_W); cntArgs[5].SetNumber(22.0);
         s_clip.Invoke("createTextField", nullptr, cntArgs, 6);
 

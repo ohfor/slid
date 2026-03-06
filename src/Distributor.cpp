@@ -199,7 +199,7 @@ namespace Distributor {
         if (a_resolveRefs) {
             filterRefs.resize(a_filters.size(), nullptr);
             for (size_t i = 0; i < a_filters.size(); ++i) {
-                if (a_filters[i].containerFormID != 0) {
+                if (a_filters[i].containerFormID != 0 && a_filters[i].containerFormID != a_masterFormID) {
                     filterRefs[i] = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_filters[i].containerFormID);
                 }
             }
@@ -224,7 +224,11 @@ namespace Distributor {
                     // First matching linked filter claims this item
                     firstMatch = static_cast<int>(i);
                     result.filterOutcomes[i].claimedCount += poolItem.count;
-                    if (a_resolveRefs && filterRefs[i]) {
+                    if (a_filters[i].containerFormID == a_masterFormID) {
+                        logger::debug("  Keep: {}x {} claimed by '{}' (stays in master)",
+                                     poolItem.count, poolItem.item->GetName(),
+                                     a_filters[i].filterID);
+                    } else if (a_resolveRefs && filterRefs[i]) {
                         result.routes.push_back({poolItem.item, poolItem.count, filterRefs[i]});
                     }
                 } else {
@@ -243,6 +247,10 @@ namespace Distributor {
                     }
                 } else {
                     result.originCount += poolItem.count;
+                    logger::debug("  Unclaimed: {}x {} (FormID {:08X}, type {})",
+                                 poolItem.count, poolItem.item->GetName(),
+                                 poolItem.item->GetFormID(),
+                                 static_cast<int>(poolItem.item->GetFormType()));
                 }
             }
         }
@@ -352,9 +360,19 @@ namespace Distributor {
         std::vector<PoolItem> pool;
         auto masterInv = masterRef->GetInventory();
         for (auto& [item, data] : masterInv) {
-            if (!item || data.first <= 0 || IsPhantomItem(item)) continue;
+            if (!item || data.first <= 0) continue;
+            if (IsPhantomItem(item)) {
+                logger::debug("  Phantom skip: {} (FormID {:08X}, type {}, playable={})",
+                             item->GetName() ? item->GetName() : "(null)",
+                             item->GetFormID(),
+                             static_cast<int>(item->GetFormType()),
+                             item->GetPlayable());
+                continue;
+            }
             pool.push_back({item, data.first});
         }
+        logger::debug("  Pool: {} items from master {:08X} (inv size {})",
+                     pool.size(), net->masterFormID, masterInv.size());
 
         // Phase 3: Run pipeline (effective filters — unavailable containers already zeroed)
         auto pipelineResult = RunPipeline(effective.filters, effective.catchAllFormID,
@@ -464,6 +482,60 @@ namespace Distributor {
 
         auto* registry = FilterRegistry::GetSingleton();
 
+        // Build worn set: biped slots AND IsWorn() must agree.  Either source alone
+        // can have false positives (stale ExtraWorn from multi-equip mods, or ghost
+        // biped refs for items no longer in inventory).
+        std::set<RE::FormID> equippedForms;
+        {
+            std::set<RE::FormID> bipedForms;
+            auto& runtimeData = player->GetActorRuntimeData();
+            if (auto biped = runtimeData.biped) {
+                for (std::uint32_t slot = 0; slot < RE::BIPED_OBJECTS::kTotal; ++slot) {
+                    if (auto* form = biped->objects[slot].item) {
+                        bipedForms.insert(form->GetFormID());
+                    }
+                }
+            }
+            auto playerInvWorn = player->GetInventory();
+            for (auto& [itm, d] : playerInvWorn) {
+                if (!itm || d.first <= 0) continue;
+                if (d.second->IsWorn() && bipedForms.contains(itm->GetFormID())) {
+                    equippedForms.insert(itm->GetFormID());
+                }
+            }
+        }
+
+        // Partial-family handling: when a family root is tri-state (some children
+        // checked, some not), the root itself isn't in whooshFilters.  We add it
+        // back so it still catches miscellaneous items in the family, then veto
+        // items that match an explicitly unchecked child.
+        std::unordered_set<std::string> effectiveFilters = net->whooshFilters;
+        std::vector<const IFilter*> vetoFilters;
+        {
+            for (const auto& rootID : registry->GetFamilyRoots()) {
+                const auto& children = registry->GetChildren(rootID);
+                if (children.empty()) continue;
+                bool anyChecked = false, anyUnchecked = false;
+                for (const auto& childID : children) {
+                    if (net->whooshFilters.count(childID)) anyChecked = true;
+                    else anyUnchecked = true;
+                }
+                if (!anyChecked || !anyUnchecked) continue;
+                // Partial family — re-add root so it catches non-specific items
+                if (net->whooshFilters.count(rootID) == 0) {
+                    effectiveFilters.insert(rootID);
+                }
+                // Collect unchecked children as veto filters
+                for (const auto& childID : children) {
+                    if (net->whooshFilters.count(childID) == 0) {
+                        if (auto* f = registry->GetFilter(childID)) {
+                            vetoFilters.push_back(f);
+                        }
+                    }
+                }
+            }
+        }
+
         struct MoveEntry {
             RE::TESBoundObject* item;
             int32_t count;
@@ -477,7 +549,7 @@ namespace Distributor {
             auto& invData = data.second;
 
             if (invData->IsQuestObject()) continue;
-            if (invData->IsWorn()) continue;
+            if (equippedForms.contains(item->GetFormID())) continue;
             if (invData->IsFavorited()) continue;
 
             if (item->IsGold()) continue;
@@ -486,13 +558,26 @@ namespace Distributor {
 
             // Item drains if ANY enabled filter matches
             bool shouldDrain = false;
-            for (const auto& filterID : net->whooshFilters) {
+            for (const auto& filterID : effectiveFilters) {
                 auto* filter = registry->GetFilter(filterID);
                 if (filter && filter->Matches(item)) {
                     shouldDrain = true;
                     logger::debug("  Whoosh check: {} matched filter '{}'",
                                  item->GetName(), filterID);
                     break;
+                }
+            }
+
+            // Veto: if item matches an unchecked sibling filter, the user
+            // explicitly excluded this category — override the match
+            if (shouldDrain) {
+                for (auto* veto : vetoFilters) {
+                    if (veto->Matches(item)) {
+                        shouldDrain = false;
+                        logger::debug("  Whoosh veto: {} matched unchecked filter '{}'",
+                                     item->GetName(), veto->GetID());
+                        break;
+                    }
                 }
             }
 

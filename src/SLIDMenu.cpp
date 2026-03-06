@@ -215,16 +215,16 @@ namespace SLIDMenu {
 
         // Column headers (inside FILTERS band)
         double headerY = ROW_Y + ROW_HEIGHT + 1.0;  // just inside the FILTERS band
-        ScaleformUtil::CreateLabel(uiMovie.get(), "_colNum",       60, ROW_X + COL_NUM_X,       headerY, COL_NUM_W,       18.0, "#",         12, COLOR_HEADERS);
+        ScaleformUtil::CreateLabel(uiMovie.get(), "_colNum",       60, ROW_X + COL_NUM_X,       headerY, COL_NUM_W,       22.0, "#",         12, COLOR_HEADERS);
         std::string colFilter = T("$SLID_ColFilter");
         std::string colContainer = T("$SLID_ColContainer");
-        ScaleformUtil::CreateLabel(uiMovie.get(), "_colFilter",    61, ROW_X + COL_FILTER_X,    headerY, COL_FILTER_W,    18.0, colFilter.c_str(),    12, COLOR_HEADERS);
-        ScaleformUtil::CreateLabel(uiMovie.get(), "_colContainer", 62, ROW_X + COL_CONTAINER_X, headerY, COL_CONTAINER_W, 18.0, colContainer.c_str(), 12, COLOR_HEADERS);
-        ScaleformUtil::CreateLabel(uiMovie.get(), "_colItems",     63, ROW_X + COL_ITEMS_X,     headerY, COL_ITEMS_W,     18.0, "Items",     12, COLOR_HEADERS);
+        ScaleformUtil::CreateLabel(uiMovie.get(), "_colFilter",    61, ROW_X + COL_FILTER_X,    headerY, COL_FILTER_W,    22.0, colFilter.c_str(),    12, COLOR_HEADERS);
+        ScaleformUtil::CreateLabel(uiMovie.get(), "_colContainer", 62, ROW_X + COL_CONTAINER_X, headerY, COL_CONTAINER_W, 22.0, colContainer.c_str(), 12, COLOR_HEADERS);
+        ScaleformUtil::CreateLabel(uiMovie.get(), "_colItems",     63, ROW_X + COL_ITEMS_X,     headerY, COL_ITEMS_W,     22.0, "Items",     12, COLOR_HEADERS);
 
         // Guide text
         double guideTextY = CATCHALL_ROW_Y + ROW_HEIGHT + 4.0;
-        ScaleformUtil::CreateLabel(uiMovie.get(), "_guideText", 42, ROW_X, guideTextY, ROW_W, 18.0, "", 14, COLOR_HINT);
+        ScaleformUtil::CreateLabel(uiMovie.get(), "_guideText", 42, ROW_X, guideTextY, ROW_W, 24.0, "", 14, COLOR_HINT);
 
         // FILTERS band (column headers are overlaid on this band)
         {
@@ -374,9 +374,21 @@ namespace SLIDMenu {
             catchAllIsMaster ? prediction.originCount : prediction.catchAllCount,
             catchAllIsMaster);
 
+        // Predicted master total: unclaimed + Keep-filter claims + catch-all-as-Keep
+        int predictedMasterCount = prediction.originCount;
+        for (size_t i = 0; i < filters.size(); ++i) {
+            if (filters[i].containerFormID == masterFormID) {
+                predictedMasterCount += prediction.filterCounts[i];
+            }
+        }
+        if (catchAllIsMaster) {
+            predictedMasterCount += prediction.catchAllCount;
+        }
+        FilterPanel::SetPredictedOriginCount(predictedMasterCount);
+
         OriginPanel::UpdateCount(uiMovie.get(),
             FilterPanel::GetCurrentOriginCount(),
-            FilterPanel::GetPredictedOriginCount());
+            predictedMasterCount);
 
         UpdateGuideText();
     }

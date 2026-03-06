@@ -12,7 +12,6 @@ Intelligent storage management for Skyrim SE/AE. Create storage networks that au
 - **Whoosh & Restock** - Dump inventory and restock essentials in one action
 - **Sell automation** - Items in your sell container are automatically sold for gold on sleep/wait
 - **Vendor wholesale** - Register merchants for scheduled visits with better rates (requires Investor perk)
-- **Summoned chest** - Access your master container from anywhere with a 2-minute conjured chest
 - **LOTD integration** - Museum-needed items filter to a dedicated container (requires TCC)
 - **SCIE integration** - Link containers work as crafting sources, SCIE containers can join Links
 - **Follower storage** - [NFF](https://www.nexusmods.com/skyrimspecialedition/mods/55653) and [KWF](https://www.nexusmods.com/skyrimspecialedition/mods/2227) follower containers appear in the picker (auto-detected)
@@ -30,8 +29,7 @@ SLID gives you one power: **SLID**. Cast it, and it reads the situation:
 
 - **Looking at a container?** — Create a Link, add to a Link, set as sell, or manage it if already linked
 - **Looking at your master?** — Open, Whoosh, Sort, Sweep, Restock, Configure, or Destroy Link
-- **Looking at a vendor?** — Establish a wholesale arrangement (if eligible)
-- **Looking at nothing?** — Access all your Links with network cycling, Detect, Summon, Whoosh, Restock
+- **Looking at nothing?** — Access all your Links with network cycling, Detect, Whoosh, Restock
 
 Destructive actions (Destroy Link, Remove) require holding the button for one second to confirm.
 
@@ -66,10 +64,6 @@ Pull items from Link storage back to you, up to quantities you configure per cat
 3. Sleep or wait - SLID automatically sells items and deposits gold
 
 **Vendor Wholesale:** Register merchants for better rates. Requires the Investor perk and 5,000 gold. Vendors visit your sell container on their own schedule.
-
-### Remote Access
-
-Cast **SLID** at the air and select **Summon** to conjure your master container anywhere for 2 minutes with full access to Sort, Sweep, Whoosh, and Restock.
 
 ## Filter Families
 

@@ -120,7 +120,7 @@ namespace CatchAllPanel {
         s_rowClip.Invoke("createEmptyMovieClip", nullptr, bgArgs, 2);
 
         // Text fields
-        double textY = 8.0;
+        double textY = 8.0 - ScaleformUtil::TextYCorrection(14);
         double rowH = ROW_HEIGHT;
 
         // Filter name text

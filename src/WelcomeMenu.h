@@ -33,7 +33,8 @@ namespace WelcomeMenu {
 
         // Helper methods
         void CreateTextField(RE::GFxValue& a_parent, const char* a_name, int a_depth,
-                             double a_x, double a_y, double a_w, double a_h);
+                             double a_x, double a_y, double a_w, double a_h,
+                             int a_fontSize = 14);
         void SetTextFormat(RE::GFxValue& a_textField, const char* a_font, int a_size,
                            uint32_t a_color, const char* a_align, bool a_multiline, bool a_wordWrap);
 

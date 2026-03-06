@@ -362,7 +362,11 @@
     "$SLID_RsCatSuppliesFirewood": "Firewood",
     "$SLID_RsCatSoulGems": "Soul Gems",
     "$SLID_RsCatSoulGemsFilled": "Filled",
-    "$SLID_RsCatAmmoMagic": "Magical"
+    "$SLID_RsCatAmmoMagic": "Magical",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "FRENCH": {
     "$SLID_PageSettings": "Paramètres",
@@ -727,7 +731,11 @@
     "$SLID_RsCatSuppliesFirewood": "Bois de chauffage",
     "$SLID_RsCatSoulGems": "Gemmes spirituelles",
     "$SLID_RsCatSoulGemsFilled": "Pleines",
-    "$SLID_RsCatAmmoMagic": "Magiques"
+    "$SLID_RsCatAmmoMagic": "Magiques",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "GERMAN": {
     "$SLID_PageSettings": "Einstellungen",
@@ -1092,7 +1100,11 @@
     "$SLID_RsCatSuppliesFirewood": "Brennholz",
     "$SLID_RsCatSoulGems": "Seelensteine",
     "$SLID_RsCatSoulGemsFilled": "Gefüllt",
-    "$SLID_RsCatAmmoMagic": "Magisch"
+    "$SLID_RsCatAmmoMagic": "Magisch",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "ITALIAN": {
     "$SLID_PageSettings": "Impostazioni",
@@ -1457,7 +1469,11 @@
     "$SLID_RsCatSuppliesFirewood": "Legna da ardere",
     "$SLID_RsCatSoulGems": "Gemme dell'anima",
     "$SLID_RsCatSoulGemsFilled": "Piene",
-    "$SLID_RsCatAmmoMagic": "Magiche"
+    "$SLID_RsCatAmmoMagic": "Magiche",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "SPANISH": {
     "$SLID_PageSettings": "Ajustes",
@@ -1822,7 +1838,11 @@
     "$SLID_RsCatSuppliesFirewood": "Leña",
     "$SLID_RsCatSoulGems": "Gemas del alma",
     "$SLID_RsCatSoulGemsFilled": "Llenas",
-    "$SLID_RsCatAmmoMagic": "Mágica"
+    "$SLID_RsCatAmmoMagic": "Mágica",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "RUSSIAN": {
     "$SLID_PageSettings": "Настройки",
@@ -2187,7 +2207,11 @@
     "$SLID_RsCatSuppliesFirewood": "Дрова",
     "$SLID_RsCatSoulGems": "Камни душ",
     "$SLID_RsCatSoulGemsFilled": "Заполненные",
-    "$SLID_RsCatAmmoMagic": "Магические"
+    "$SLID_RsCatAmmoMagic": "Магические",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "POLISH": {
     "$SLID_PageSettings": "Ustawienia",
@@ -2552,7 +2576,11 @@
     "$SLID_RsCatSuppliesFirewood": "Drewno",
     "$SLID_RsCatSoulGems": "Kamienie dusz",
     "$SLID_RsCatSoulGemsFilled": "Wypełnione",
-    "$SLID_RsCatAmmoMagic": "Magiczne"
+    "$SLID_RsCatAmmoMagic": "Magiczne",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "CZECH": {
     "$SLID_PageSettings": "Nastavení",
@@ -2917,7 +2945,11 @@
     "$SLID_RsCatSuppliesFirewood": "Palivové dřevo",
     "$SLID_RsCatSoulGems": "Kameny duší",
     "$SLID_RsCatSoulGemsFilled": "Naplněné",
-    "$SLID_RsCatAmmoMagic": "Magické"
+    "$SLID_RsCatAmmoMagic": "Magické",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "TURKISH": {
     "$SLID_PageSettings": "Ayarlar",
@@ -3282,7 +3314,11 @@
     "$SLID_RsCatSuppliesFirewood": "Odun",
     "$SLID_RsCatSoulGems": "Ruh Taşları",
     "$SLID_RsCatSoulGemsFilled": "Dolu",
-    "$SLID_RsCatAmmoMagic": "Büyülü"
+    "$SLID_RsCatAmmoMagic": "Büyülü",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "JAPANESE": {
     "$SLID_PageSettings": "設定",
@@ -3647,7 +3683,11 @@
     "$SLID_RsCatSuppliesFirewood": "薪",
     "$SLID_RsCatSoulGems": "魂石",
     "$SLID_RsCatSoulGemsFilled": "充填済み",
-    "$SLID_RsCatAmmoMagic": "魔法"
+    "$SLID_RsCatAmmoMagic": "魔法",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "KOREAN": {
     "$SLID_PageSettings": "설정",
@@ -4012,7 +4052,11 @@
     "$SLID_RsCatSuppliesFirewood": "장작",
     "$SLID_RsCatSoulGems": "영혼석",
     "$SLID_RsCatSoulGemsFilled": "채워진",
-    "$SLID_RsCatAmmoMagic": "마법"
+    "$SLID_RsCatAmmoMagic": "마법",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "SCHINESE": {
     "$SLID_PageSettings": "设置",
@@ -4377,7 +4421,11 @@
     "$SLID_RsCatSuppliesFirewood": "木柴",
     "$SLID_RsCatSoulGems": "灵魂石",
     "$SLID_RsCatSoulGemsFilled": "已充能",
-    "$SLID_RsCatAmmoMagic": "魔法"
+    "$SLID_RsCatAmmoMagic": "魔法",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   },
   "TCHINESE": {
     "$SLID_PageSettings": "設定",
@@ -4742,6 +4790,10 @@
     "$SLID_RsCatSuppliesFirewood": "木柴",
     "$SLID_RsCatSoulGems": "靈魂石",
     "$SLID_RsCatSoulGemsFilled": "已充能",
-    "$SLID_RsCatAmmoMagic": "魔法"
+    "$SLID_RsCatAmmoMagic": "魔法",
+    "$SLID_FontTest": "Localisation Support",
+    "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
+    "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
+    "$SLID_FontTestTitle": "Localisation Support"
   }
 }

@@ -13,6 +13,7 @@
 #include "TranslationService.h"
 #include "Version.h"
 #include "WelcomeMenu.h"
+#include "FontTestMenu.h"
 #include "SCIEIntegration.h"
 #include "ContextResolver.h"
 #include "ContextMenu.h"
@@ -1723,6 +1724,27 @@ namespace ConsoleCommands {
         });
     }
 
+    void ShowFontTest(RE::StaticFunctionTag*) {
+        logger::info("ShowFontTest native called");
+
+        // Close the journal menu (MCM)
+        if (auto* msgQueue = RE::UIMessageQueue::GetSingleton()) {
+            msgQueue->AddMessage("Journal Menu", RE::UI_MESSAGE_TYPE::kHide, nullptr);
+        }
+
+        // Wait several frames for the journal menu to fully close
+        auto frameCounter = std::make_shared<int>(10);
+        auto tick = std::make_shared<std::function<void()>>();
+        *tick = [frameCounter, tick]() {
+            if (--(*frameCounter) > 0) {
+                SKSE::GetTaskInterface()->AddTask(std::function<void()>(*tick));
+                return;
+            }
+            FontTestMenu::Menu::Show();
+        };
+        SKSE::GetTaskInterface()->AddTask(std::function<void()>(*tick));
+    }
+
     // =========================================================================
     // Context Action Dispatch (unified power)
     // =========================================================================
@@ -2186,6 +2208,7 @@ namespace ConsoleCommands {
         a_vm->RegisterFunction("RefreshPowers"sv, className, RefreshPowers);
         a_vm->RegisterFunction("ShowConfigMenu"sv, className, ShowConfigMenu);
         a_vm->RegisterFunction("HideConfigMenu"sv, className, HideConfigMenu);
+        a_vm->RegisterFunction("ShowFontTest"sv, className, ShowFontTest);
 
         // MCM Settings - General
         a_vm->RegisterFunction("GetModEnabled"sv, className, GetModEnabled);

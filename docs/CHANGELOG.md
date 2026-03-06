@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-03-06
+
+### Added
+
+- **Noto Sans font** — Replaced Arial with Noto Sans for Latin/Cyrillic/Greek scripts and Noto Sans CJK SC for Chinese/Japanese/Korean. Language detected from `sLanguage:General` INI setting. Supports all 13 SLID translation languages natively
+- **Font Test Menu** — New MCM option under Maintenance ("Localisation Support") opens a popup showing all 13 supported languages with native sample text, so users can verify font rendering in their setup
+
+### Fixed
+
+- Whoosh skipped unequipped items when multi-slot equip mods (extra ring/amulet slots) left stale `ExtraWorn` flags on inventory entries
+- Whoosh ignored partially-checked filter families. Unchecking a child filter (e.g., "Unlearned Spell Tomes") had no effect when a sibling was still checked
+- Config menu prediction counts showed wrong values when multiple filters shared a container, producing false delta arrows
+- Config menu origin panel showed raw master item count instead of the predicted post-sort total
+
 ## [1.3.0] - 2026-03-02
 
 ### Added

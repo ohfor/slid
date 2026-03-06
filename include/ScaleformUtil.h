@@ -12,6 +12,20 @@ namespace ScaleformUtil {
     constexpr uint32_t GAMEPAD_LB         = 0x0100;
     constexpr uint32_t GAMEPAD_RB         = 0x0200;
 
+    // Returns the embedded font name appropriate for the game's current language.
+    // CJK languages (Japanese, Korean, Simplified/Traditional Chinese) → "Noto Sans CJK SC Regular"
+    // All other languages → "Noto Sans"
+    // Result is cached on first call (language doesn't change mid-session).
+    const char* GetFont();
+
+    // Y-position correction for Noto Sans vs the previously-used Arial font.
+    // Noto Sans has a larger ascent-to-capHeight gap (727/2048 vs 387/2048 em units),
+    // which pushes glyphs ~2.3px lower inside TextFields at 14px.
+    // Subtract this from Y when creating text fields to restore proper visual centering.
+    inline double TextYCorrection(int a_fontSize) {
+        return static_cast<double>(a_fontSize) * (340.0 / 2048.0);  // ≈ 0.166 * fontSize
+    }
+
     // Drawing API helpers — stateless free functions, take movie pointer explicitly
 
     void DrawFilledRect(RE::GFxMovieView* a_movie, const char* a_name, int a_depth,

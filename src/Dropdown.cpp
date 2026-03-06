@@ -269,7 +269,7 @@ void Dropdown::RenderClosed(RE::GFxMovieView* a_movie, RE::GFxValue& a_parentCli
         // Position text inside the dropdown box with left margin, vertically centered
         double textX = a_x + DD_CLOSED_PAD;
         double textW = a_w - DD_CLOSED_PAD * 2 - DD_CHEVRON_SIZE - 4.0;
-        double textY = a_y + (a_h - 18.0) / 2.0;  // 18px ~= 14pt line height
+        double textY = a_y + (a_h - 18.0) / 2.0 - ScaleformUtil::TextYCorrection(14);
 
         RE::GFxValue xVal, yVal, wVal;
         xVal.SetNumber(textX);
@@ -606,8 +606,9 @@ void Dropdown::DrawPopup() {
         double textW = m_config.width - PAD * 2 - 20.0;
         RE::GFxValue tfArgs[6];
         tfArgs[0].SetString("_text"); tfArgs[1].SetNumber(10.0);
-        tfArgs[2].SetNumber(8.0); tfArgs[3].SetNumber(4.0);
-        tfArgs[4].SetNumber(textW); tfArgs[5].SetNumber(m_config.rowHeight - 4.0);
+        double ddTextY = 4.0 - ScaleformUtil::TextYCorrection(14);
+        tfArgs[2].SetNumber(8.0); tfArgs[3].SetNumber(ddTextY);
+        tfArgs[4].SetNumber(textW); tfArgs[5].SetNumber(m_config.rowHeight - ddTextY);
         m_rowClips[i].Invoke("createTextField", nullptr, tfArgs, 6);
 
         std::string textPath = "_root." + rowName + "._text";

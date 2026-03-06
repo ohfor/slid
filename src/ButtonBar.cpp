@@ -66,8 +66,9 @@ void ButtonBar::Init(RE::GFxMovieView* a_movie, const std::string& a_clipPrefix,
         // Label text field
         RE::GFxValue tfArgs[6];
         tfArgs[0].SetString("_label"); tfArgs[1].SetNumber(10.0);
-        tfArgs[2].SetNumber(0.0); tfArgs[3].SetNumber(4.0);
-        tfArgs[4].SetNumber(btnW); tfArgs[5].SetNumber(ButtonColors::HEIGHT - 4.0);
+        double labelY = 4.0 - ScaleformUtil::TextYCorrection(ButtonColors::FONT_SIZE);
+        tfArgs[2].SetNumber(0.0); tfArgs[3].SetNumber(labelY);
+        tfArgs[4].SetNumber(btnW); tfArgs[5].SetNumber(ButtonColors::HEIGHT - labelY);
         clip.Invoke("createTextField", nullptr, tfArgs, 6);
 
         std::string labelPath = "_root." + clipName + "._label";

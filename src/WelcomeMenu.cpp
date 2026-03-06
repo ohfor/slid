@@ -192,12 +192,14 @@ namespace WelcomeMenu {
     }
 
     void Menu::CreateTextField(RE::GFxValue& a_parent, const char* a_name, int a_depth,
-                               double a_x, double a_y, double a_w, double a_h) {
+                               double a_x, double a_y, double a_w, double a_h,
+                               int a_fontSize) {
+        double correctedY = a_y - ScaleformUtil::TextYCorrection(a_fontSize);
         RE::GFxValue tfArgs[6];
         tfArgs[0].SetString(a_name);
         tfArgs[1].SetNumber(static_cast<double>(a_depth));
         tfArgs[2].SetNumber(a_x);
-        tfArgs[3].SetNumber(a_y);
+        tfArgs[3].SetNumber(correctedY);
         tfArgs[4].SetNumber(a_w);
         tfArgs[5].SetNumber(a_h);
         a_parent.Invoke("createTextField", nullptr, tfArgs, 6);
@@ -251,12 +253,12 @@ namespace WelcomeMenu {
         float y = PADDING;
 
         // Main title
-        CreateTextField(m_panel, "titleText", 10, PADDING, y, POPUP_W - (PADDING * 2), HEADER_SIZE + 4);
+        CreateTextField(m_panel, "titleText", 10, PADDING, y, POPUP_W - (PADDING * 2), HEADER_SIZE + 10, static_cast<int>(HEADER_SIZE));
 
         RE::GFxValue titleField;
         m_panel.GetMember("titleText", &titleField);
         if (!titleField.IsUndefined()) {
-            SetTextFormat(titleField, "Arial", static_cast<int>(HEADER_SIZE), COLOR_HEADER, "center", false, false);
+            SetTextFormat(titleField, ScaleformUtil::GetFont(), static_cast<int>(HEADER_SIZE), COLOR_HEADER, "center", false, false);
 
             RE::GFxValue textVal;
             std::string title = T("$SLID_WelcomeTitle");
@@ -274,11 +276,11 @@ namespace WelcomeMenu {
         // Section 1: Your Link
         {
             std::string name = "sub1";
-            CreateTextField(m_panel, name.c_str(), depth++, textX, y, textW, SUBHEADER_SIZE + 4);
+            CreateTextField(m_panel, name.c_str(), depth++, textX, y, textW, SUBHEADER_SIZE + 10, static_cast<int>(SUBHEADER_SIZE));
             RE::GFxValue field;
             m_panel.GetMember(name.c_str(), &field);
             if (!field.IsUndefined()) {
-                SetTextFormat(field, "Arial", static_cast<int>(SUBHEADER_SIZE), COLOR_SUBHEADER, "left", false, false);
+                SetTextFormat(field, ScaleformUtil::GetFont(), static_cast<int>(SUBHEADER_SIZE), COLOR_SUBHEADER, "left", false, false);
                 RE::GFxValue textVal;
                 std::string text = T("$SLID_WelcomeYourLink");
                 textVal.SetString(text.c_str());
@@ -290,7 +292,7 @@ namespace WelcomeMenu {
             CreateTextField(m_panel, name.c_str(), depth++, textX, y, textW, LINE_HEIGHT * 3);
             m_panel.GetMember(name.c_str(), &field);
             if (!field.IsUndefined()) {
-                SetTextFormat(field, "Arial", static_cast<int>(BODY_SIZE), COLOR_BODY, "left", true, true);
+                SetTextFormat(field, ScaleformUtil::GetFont(), static_cast<int>(BODY_SIZE), COLOR_BODY, "left", true, true);
                 RE::GFxValue textVal;
                 std::string text = T("$SLID_WelcomeYourLinkBody");
                 textVal.SetString(text.c_str());
@@ -302,11 +304,11 @@ namespace WelcomeMenu {
         // Section 2: Sorting
         {
             std::string name = "sub2";
-            CreateTextField(m_panel, name.c_str(), depth++, textX, y, textW, SUBHEADER_SIZE + 4);
+            CreateTextField(m_panel, name.c_str(), depth++, textX, y, textW, SUBHEADER_SIZE + 10, static_cast<int>(SUBHEADER_SIZE));
             RE::GFxValue field;
             m_panel.GetMember(name.c_str(), &field);
             if (!field.IsUndefined()) {
-                SetTextFormat(field, "Arial", static_cast<int>(SUBHEADER_SIZE), COLOR_SUBHEADER, "left", false, false);
+                SetTextFormat(field, ScaleformUtil::GetFont(), static_cast<int>(SUBHEADER_SIZE), COLOR_SUBHEADER, "left", false, false);
                 RE::GFxValue textVal;
                 std::string text = T("$SLID_WelcomeSorting");
                 textVal.SetString(text.c_str());
@@ -318,7 +320,7 @@ namespace WelcomeMenu {
             CreateTextField(m_panel, name.c_str(), depth++, textX, y, textW, LINE_HEIGHT * 3);
             m_panel.GetMember(name.c_str(), &field);
             if (!field.IsUndefined()) {
-                SetTextFormat(field, "Arial", static_cast<int>(BODY_SIZE), COLOR_BODY, "left", true, true);
+                SetTextFormat(field, ScaleformUtil::GetFont(), static_cast<int>(BODY_SIZE), COLOR_BODY, "left", true, true);
                 RE::GFxValue textVal;
                 std::string text = T("$SLID_WelcomeSortingBody");
                 textVal.SetString(text.c_str());
@@ -330,11 +332,11 @@ namespace WelcomeMenu {
         // Section 3: Selling
         {
             std::string name = "sub3";
-            CreateTextField(m_panel, name.c_str(), depth++, textX, y, textW, SUBHEADER_SIZE + 4);
+            CreateTextField(m_panel, name.c_str(), depth++, textX, y, textW, SUBHEADER_SIZE + 10, static_cast<int>(SUBHEADER_SIZE));
             RE::GFxValue field;
             m_panel.GetMember(name.c_str(), &field);
             if (!field.IsUndefined()) {
-                SetTextFormat(field, "Arial", static_cast<int>(SUBHEADER_SIZE), COLOR_SUBHEADER, "left", false, false);
+                SetTextFormat(field, ScaleformUtil::GetFont(), static_cast<int>(SUBHEADER_SIZE), COLOR_SUBHEADER, "left", false, false);
                 RE::GFxValue textVal;
                 std::string text = T("$SLID_WelcomeSelling");
                 textVal.SetString(text.c_str());
@@ -346,7 +348,7 @@ namespace WelcomeMenu {
             CreateTextField(m_panel, name.c_str(), depth++, textX, y, textW, LINE_HEIGHT * 4);
             m_panel.GetMember(name.c_str(), &field);
             if (!field.IsUndefined()) {
-                SetTextFormat(field, "Arial", static_cast<int>(BODY_SIZE), COLOR_BODY, "left", true, true);
+                SetTextFormat(field, ScaleformUtil::GetFont(), static_cast<int>(BODY_SIZE), COLOR_BODY, "left", true, true);
                 RE::GFxValue textVal;
                 std::string text = T("$SLID_WelcomeSellingBody");
                 textVal.SetString(text.c_str());
@@ -357,11 +359,11 @@ namespace WelcomeMenu {
 
         // Closing line
         {
-            CreateTextField(m_panel, "closing", depth++, textX, y, textW, BODY_SIZE + 4);
+            CreateTextField(m_panel, "closing", depth++, textX, y, textW, BODY_SIZE + 10);
             RE::GFxValue field;
             m_panel.GetMember("closing", &field);
             if (!field.IsUndefined()) {
-                SetTextFormat(field, "Arial", static_cast<int>(BODY_SIZE), 0x999999, "left", false, false);
+                SetTextFormat(field, ScaleformUtil::GetFont(), static_cast<int>(BODY_SIZE), 0x999999, "left", false, false);
                 RE::GFxValue textVal;
                 std::string text = T("$SLID_WelcomeClosing");
                 textVal.SetString(text.c_str());
@@ -461,11 +463,11 @@ namespace WelcomeMenu {
 
         // Label
         CreateTextField(m_panel, "checkboxLabel", 203,
-            checkboxX + CHECKBOX_SIZE + 8.0f, checkboxY - 2.0f, 250.0f, BODY_SIZE + 4);
+            checkboxX + CHECKBOX_SIZE + 8.0f, checkboxY - 2.0f, 250.0f, BODY_SIZE + 10);
         RE::GFxValue labelField;
         m_panel.GetMember("checkboxLabel", &labelField);
         if (!labelField.IsUndefined()) {
-            SetTextFormat(labelField, "Arial", static_cast<int>(BODY_SIZE), COLOR_BODY, "left", false, false);
+            SetTextFormat(labelField, ScaleformUtil::GetFont(), static_cast<int>(BODY_SIZE), COLOR_BODY, "left", false, false);
             RE::GFxValue textVal;
             std::string text = T("$SLID_WelcomeCheckbox");
             textVal.SetString(text.c_str());
@@ -529,11 +531,12 @@ namespace WelcomeMenu {
         }
 
         // Button text
-        CreateTextField(buttonClip, "okText", 10, 0, (BUTTON_H - BODY_SIZE) / 2.0f - 2.0f, BUTTON_W, BODY_SIZE + 4);
+        float btnTextH = BODY_SIZE + 10.0f;
+        CreateTextField(buttonClip, "okText", 10, 0, (BUTTON_H - btnTextH) / 2.0f, BUTTON_W, btnTextH);
         RE::GFxValue buttonText;
         buttonClip.GetMember("okText", &buttonText);
         if (!buttonText.IsUndefined()) {
-            SetTextFormat(buttonText, "Arial", static_cast<int>(BODY_SIZE), COLOR_BUTTON_TEXT, "center", false, false);
+            SetTextFormat(buttonText, ScaleformUtil::GetFont(), static_cast<int>(BODY_SIZE), COLOR_BUTTON_TEXT, "center", false, false);
             RE::GFxValue textVal;
             std::string text = T("$SLID_OK");
             textVal.SetString(text.c_str());

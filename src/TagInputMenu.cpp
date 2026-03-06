@@ -468,7 +468,7 @@ namespace TagInputMenu {
                     uiMovie->CreateObject(&fmt, "TextFormat");
                     if (!fmt.IsUndefined()) {
                         RE::GFxValue fontVal, sizeVal;
-                        fontVal.SetString("Arial");
+                        fontVal.SetString(ScaleformUtil::GetFont());
                         fmt.SetMember("font", fontVal);
                         sizeVal.SetNumber(16.0);
                         fmt.SetMember("size", sizeVal);
@@ -598,9 +598,10 @@ namespace TagInputMenu {
 
                 // Label
                 RE::GFxValue tfArgs[6];
+                double btnTextY = 4.0 - ScaleformUtil::TextYCorrection(13);
                 tfArgs[0].SetString("_label"); tfArgs[1].SetNumber(10.0);
-                tfArgs[2].SetNumber(0.0); tfArgs[3].SetNumber(4.0);
-                tfArgs[4].SetNumber(BTN_ACCEPT_W); tfArgs[5].SetNumber(BTN_H - 4.0);
+                tfArgs[2].SetNumber(0.0); tfArgs[3].SetNumber(btnTextY);
+                tfArgs[4].SetNumber(BTN_ACCEPT_W); tfArgs[5].SetNumber(BTN_H - btnTextY);
                 clip.Invoke("createTextField", nullptr, tfArgs, 6);
 
                 RE::GFxValue tf;
@@ -610,7 +611,7 @@ namespace TagInputMenu {
                     uiMovie->CreateObject(&fmt, "TextFormat");
                     if (!fmt.IsUndefined()) {
                         RE::GFxValue fontVal, sizeVal, colorVal, alignVal;
-                        fontVal.SetString("Arial");
+                        fontVal.SetString(ScaleformUtil::GetFont());
                         fmt.SetMember("font", fontVal);
                         sizeVal.SetNumber(13.0);
                         fmt.SetMember("size", sizeVal);
@@ -678,9 +679,10 @@ namespace TagInputMenu {
 
                 // Label
                 RE::GFxValue tfArgs[6];
+                double btnTextYC = 4.0 - ScaleformUtil::TextYCorrection(13);
                 tfArgs[0].SetString("_label"); tfArgs[1].SetNumber(10.0);
-                tfArgs[2].SetNumber(0.0); tfArgs[3].SetNumber(4.0);
-                tfArgs[4].SetNumber(BTN_CANCEL_W); tfArgs[5].SetNumber(BTN_H - 4.0);
+                tfArgs[2].SetNumber(0.0); tfArgs[3].SetNumber(btnTextYC);
+                tfArgs[4].SetNumber(BTN_CANCEL_W); tfArgs[5].SetNumber(BTN_H - btnTextYC);
                 clip.Invoke("createTextField", nullptr, tfArgs, 6);
 
                 RE::GFxValue tf;
@@ -690,7 +692,7 @@ namespace TagInputMenu {
                     uiMovie->CreateObject(&fmt, "TextFormat");
                     if (!fmt.IsUndefined()) {
                         RE::GFxValue fontVal, sizeVal, colorVal, alignVal;
-                        fontVal.SetString("Arial");
+                        fontVal.SetString(ScaleformUtil::GetFont());
                         fmt.SetMember("font", fontVal);
                         sizeVal.SetNumber(13.0);
                         fmt.SetMember("size", sizeVal);

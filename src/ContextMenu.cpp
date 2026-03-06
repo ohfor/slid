@@ -290,7 +290,7 @@ namespace ContextMenu {
             m_popupX + PAD, sepY, POPUP_W - PAD * 2, SEP_H, COLOR_SEP, 100);
 
         constexpr double fontSize = 14.0;
-        constexpr double textVPad = (ROW_H - fontSize) / 2.0 - 1.0;  // -1 for visual centering
+        constexpr double textVPad = (ROW_H - fontSize) / 2.0 - 2.5;  // tuned for Noto Sans cap centering
 
         for (size_t i = 0; i < m_context.actions.size(); ++i) {
             auto& entry = m_context.actions[i];

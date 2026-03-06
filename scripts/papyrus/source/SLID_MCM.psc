@@ -39,6 +39,7 @@ int _oidWholesaleDefaults
 ; Maintenance page
 int _oidSummonEnabled
 int _oidShowWelcome
+int _oidFontTest
 int _oidGrantPowers
 int _oidResetAllData
 
@@ -161,6 +162,7 @@ function ResetOptionIDs()
     _oidWholesaleDefaults = -1
     _oidSummonEnabled = -1
     _oidShowWelcome = -1
+    _oidFontTest = -1
     _oidGrantPowers = -1
     _oidResetAllData = -1
     _oidNetworkSelector = -1
@@ -379,6 +381,7 @@ function RenderMaintenancePage()
     AddHeaderOption("$SLID_HeaderHelp")
     ; Show as "Show Welcome Guide" when already shown, toggle to re-enable
     _oidShowWelcome = AddToggleOption("$SLID_ShowWelcome", !SLID_Native.GetShownWelcomeTutorial())
+    _oidFontTest = AddTextOption("$SLID_FontTest", "")
 
     AddEmptyOption()
 
@@ -583,6 +586,12 @@ event OnOptionSelect(int a_option)
     endif
 
     ; Text options (actions)
+    if (a_option == _oidFontTest)
+        ShowMessage("$SLID_FontTestClose", false)
+        SLID_Native.ShowFontTest()
+        return
+    endif
+
     if (a_option == _oidGrantPowers)
         SLID_Native.RefreshPowers()
         ShowMessage("$SLID_PowersGranted", false)
@@ -847,6 +856,11 @@ event OnOptionHighlight(int a_option)
 
     if (a_option == _oidShowWelcome)
         SetInfoText("$SLID_ShowWelcomeDesc")
+        return
+    endif
+
+    if (a_option == _oidFontTest)
+        SetInfoText("$SLID_FontTestDesc")
         return
     endif
 

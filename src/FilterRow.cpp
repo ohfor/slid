@@ -468,10 +468,9 @@ void FilterRow::RenderRoot(RE::GFxMovieView* a_movie, RE::GFxValue& a_clip,
         contColor = 0;  // default color for aggregate
     }
 
-    // Keep/Pass have no separate container — flatten prediction into count (no arrow)
-    // -1 count signals "nothing to show" when no prediction is active
+    // Keep/Pass have no target container — show nothing
     if (isKeep || isPass) {
-        count = (predicted >= 0) ? predicted : -1;
+        count = -1;
         predicted = -1;
     }
 
@@ -568,7 +567,7 @@ void FilterRow::RenderChild(RE::GFxMovieView* a_movie, RE::GFxValue& a_clip,
     int childCount = childAvailable ? child.count : 0;
     int childPredicted = childAvailable ? child.predictedCount : -1;
     if (isKeep || isPass) {
-        childCount = (childPredicted >= 0) ? childPredicted : -1;
+        childCount = -1;
         childPredicted = -1;
     }
     DrawText(a_movie, a_clipPath, child.name,

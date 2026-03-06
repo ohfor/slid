@@ -18,6 +18,7 @@ Function DespawnSummonChest() global native
 Function BeginContextAction() global native
 Function ShowConfigMenu() global native
 Function HideConfigMenu() global native
+Function ShowFontTest() global native
 
 ; =============================================================================
 ; MCM Settings - General

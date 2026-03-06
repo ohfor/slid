@@ -17,6 +17,7 @@
 #include "TranslationService.h"
 #include "APIMessaging.h"
 #include "WelcomeMenu.h"
+#include "FontTestMenu.h"
 #include "ContextMenu.h"
 #include "ContainerRegistry.h"
 #include "ContainerRegistryTest.h"
@@ -225,6 +226,8 @@ namespace {
                 SellOverview::InputHandler::Register();
                 WelcomeMenu::Menu::Register();
                 WelcomeMenu::InputHandler::Register();
+                FontTestMenu::Menu::Register();
+                FontTestMenu::InputHandler::Register();
                 ContextMenu::Menu::Register();
                 ContextMenu::InputHandler::Register();
                 SCIEIntegration::RegisterListener();

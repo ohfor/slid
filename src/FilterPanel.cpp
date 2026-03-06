@@ -575,6 +575,7 @@ namespace FilterPanel {
         s_savedActionIndex = a_actionIndex;
     }
     int GetPredictedOriginCount() { return s_predictedOriginCount; }
+    void SetPredictedOriginCount(int a_count) { s_predictedOriginCount = a_count; }
     int GetCurrentOriginCount() {
         return ContainerRegistry::GetSingleton()->CountItems(ConfigState::GetMasterFormID());
     }
@@ -965,6 +966,14 @@ namespace FilterPanel {
         // advance for every stage regardless of linked state.
         s_contestedByMaps = a_contestedByMaps;
 
+        // Sync base count to per-filter prediction for real containers.
+        // BuildFromNetwork sets count = total container items (shared across all
+        // filters pointing to the same container). The pipeline computes the true
+        // per-filter count. Setting count = predictedCount on first prediction
+        // means no delta arrow on open. Future dropdown changes only update
+        // predictedCount, producing correct arrows.
+        auto masterFormID = ConfigState::GetMasterFormID();
+
         int flatIdx = 0;
         for (auto& row : s_filterRows) {
             // Children first (matching ToFilterStages order)
@@ -972,6 +981,10 @@ namespace FilterPanel {
                 if (child.containerFormID != 0) {
                     child.predictedCount = (flatIdx < static_cast<int>(a_filterCounts.size()))
                                            ? a_filterCounts[flatIdx] : 0;
+                    // Sync base count for real containers (not Keep/Pass)
+                    if (child.containerFormID != masterFormID) {
+                        child.count = child.predictedCount;
+                    }
                     int rawContest = (flatIdx < static_cast<int>(a_contestedCounts.size()))
                                     ? a_contestedCounts[flatIdx] : 0;
                     UpdateContestTarget(child.filterID, rawContest);
@@ -985,6 +998,10 @@ namespace FilterPanel {
             if (row.GetData().containerFormID != 0) {
                 row.MutableData().predictedCount = (flatIdx < static_cast<int>(a_filterCounts.size()))
                                                    ? a_filterCounts[flatIdx] : 0;
+                // Sync base count for real containers (not Keep/Pass)
+                if (row.GetData().containerFormID != masterFormID) {
+                    row.MutableData().count = row.MutableData().predictedCount;
+                }
                 int rawContest = (flatIdx < static_cast<int>(a_contestedCounts.size()))
                                 ? a_contestedCounts[flatIdx] : 0;
                 UpdateContestTarget(row.GetData().filterID, rawContest);
@@ -1122,7 +1139,8 @@ namespace FilterPanel {
         // Text field for the add row label (created on the addRow clip)
         RE::GFxValue tfArgs[6];
         tfArgs[0].SetString("labelText"); tfArgs[1].SetNumber(10.0);
-        tfArgs[2].SetNumber(0.0); tfArgs[3].SetNumber(0.0);
+        double addRowTextY = -ScaleformUtil::TextYCorrection(14);
+        tfArgs[2].SetNumber(0.0); tfArgs[3].SetNumber(addRowTextY);
         tfArgs[4].SetNumber(ROW_W); tfArgs[5].SetNumber(ROW_HEIGHT);
         s_addRow.Invoke("createTextField", nullptr, tfArgs, 6);
 
@@ -1263,11 +1281,12 @@ namespace FilterPanel {
 
         // numText -- row number
         {
+            double y = 6.0 - ScaleformUtil::TextYCorrection(14);
             RE::GFxValue args[6];
             args[0].SetString("numText");
             args[1].SetNumber(10.0);
             args[2].SetNumber(COL_NUM_X);
-            args[3].SetNumber(6.0);
+            args[3].SetNumber(y);
             args[4].SetNumber(COL_NUM_W);
             args[5].SetNumber(22.0);
             a_slot.Invoke("createTextField", nullptr, args, 6);
@@ -1275,11 +1294,12 @@ namespace FilterPanel {
 
         // nameText -- filter name
         {
+            double y = 5.0 - ScaleformUtil::TextYCorrection(15);
             RE::GFxValue args[6];
             args[0].SetString("nameText");
             args[1].SetNumber(11.0);
             args[2].SetNumber(COL_FILTER_X);
-            args[3].SetNumber(5.0);
+            args[3].SetNumber(y);
             args[4].SetNumber(COL_FILTER_W);
             args[5].SetNumber(24.0);
             a_slot.Invoke("createTextField", nullptr, args, 6);
@@ -1287,11 +1307,12 @@ namespace FilterPanel {
 
         // containerText -- container name (depth 30: above _dd dropdown clip at depth 25)
         {
+            double y = 5.0 - ScaleformUtil::TextYCorrection(14);
             RE::GFxValue args[6];
             args[0].SetString("containerText");
             args[1].SetNumber(30.0);
             args[2].SetNumber(COL_CONTAINER_X);
-            args[3].SetNumber(5.0);
+            args[3].SetNumber(y);
             args[4].SetNumber(COL_CONTAINER_W);
             args[5].SetNumber(24.0);
             a_slot.Invoke("createTextField", nullptr, args, 6);
@@ -1299,11 +1320,12 @@ namespace FilterPanel {
 
         // countText -- item count
         {
+            double y = 6.0 - ScaleformUtil::TextYCorrection(14);
             RE::GFxValue args[6];
             args[0].SetString("countText");
             args[1].SetNumber(12.0);
             args[2].SetNumber(COL_ITEMS_X);
-            args[3].SetNumber(6.0);
+            args[3].SetNumber(y);
             args[4].SetNumber(COL_ITEMS_W);
             args[5].SetNumber(22.0);
             a_slot.Invoke("createTextField", nullptr, args, 6);
@@ -1311,11 +1333,12 @@ namespace FilterPanel {
 
         // contestText -- contested item count (amber), own column after count
         {
+            double y = 8.0 - ScaleformUtil::TextYCorrection(12);
             RE::GFxValue args[6];
             args[0].SetString("contestText");
             args[1].SetNumber(13.0);
             args[2].SetNumber(COL_ITEMS_X + COL_ITEMS_W + 2.0);  // 702px — after count column
-            args[3].SetNumber(8.0);   // vertically centered for 12pt in 34px row
+            args[3].SetNumber(y);
             args[4].SetNumber(34.0);  // fits before chest icon at 738
             args[5].SetNumber(20.0);
             a_slot.Invoke("createTextField", nullptr, args, 6);
