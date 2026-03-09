@@ -110,6 +110,16 @@ bool TranslationService::ParseFile(const std::filesystem::path& a_path) {
         wide += ch;
     }
 
+    // Detect CJK codepoints in translation values (U+4E00–U+9FFF CJK Unified,
+    // U+3400–U+4DBF CJK Extension A, U+3000–U+303F CJK Punctuation,
+    // U+AC00–U+D7AF Hangul Syllables, U+30A0–U+30FF Katakana, U+3040–U+309F Hiragana)
+    for (const auto& ch : wide) {
+        if ((ch >= 0x3000 && ch <= 0x9FFF) || (ch >= 0xAC00 && ch <= 0xD7AF)) {
+            hasCJK_ = true;
+            break;
+        }
+    }
+
     // Convert wstring to UTF-8 using Win32 API
     int utf8Len = WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()),
                                        nullptr, 0, nullptr, nullptr);

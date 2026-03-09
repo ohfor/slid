@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-03-09
+
+### Fixed
+
+- CJK characters rendered as boxes when a Chinese/Japanese/Korean translation was loaded into a non-CJK language file (e.g. SLID_ENGLISH.txt with Chinese text). Font selection now auto-detects CJK content in the loaded translation strings and switches to Noto Sans CJK regardless of game language setting
+
 ## [1.4.0] - 2026-03-09
 
 ### Added

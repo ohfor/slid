@@ -1,4 +1,5 @@
 #include "ScaleformUtil.h"
+#include "TranslationService.h"
 
 namespace ScaleformUtil {
 
@@ -20,14 +21,23 @@ namespace ScaleformUtil {
             }
         }
 
-        if (language == "JAPANESE" || language == "KOREAN" ||
-            language == "SCHINESE"  || language == "TCHINESE") {
+        bool needCJK = (language == "JAPANESE" || language == "KOREAN" ||
+                        language == "SCHINESE"  || language == "TCHINESE");
+
+        // Auto-detect: if translation file contains CJK characters (e.g. Chinese user
+        // with game set to English), use the CJK font regardless of language setting
+        if (!needCJK && TranslationService::GetSingleton()->HasCJKContent()) {
+            logger::info("ScaleformUtil: CJK content detected in translation file, overriding font");
+            needCJK = true;
+        }
+
+        if (needCJK) {
             cached = "Noto Sans CJK SC Regular";
         } else {
             cached = "Noto Sans";
         }
 
-        logger::info("ScaleformUtil: Game language '{}' → font '{}'", language, cached);
+        logger::info("ScaleformUtil: Game language '{}' -> font '{}'", language, cached);
         return cached;
     }
 

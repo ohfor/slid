@@ -16,6 +16,11 @@ public:
     /// Call after kDataLoaded (INI settings must be available for sLanguage lookup).
     void Load();
 
+    /// Returns true if the loaded translation strings contain CJK codepoints.
+    /// Used by ScaleformUtil::GetFont() to auto-select the CJK font even when
+    /// the game language is set to ENGLISH (common for Chinese users).
+    bool HasCJKContent() const { return hasCJK_; }
+
     /// Look up a translation key (e.g., "$SLID_ErrNoTarget").
     /// Returns the translated value, or the key itself if not found.
     std::string GetTranslation(const std::string& a_key) const;
@@ -39,6 +44,7 @@ private:
 
     std::unordered_map<std::string, std::string> translations_;
     bool loaded_ = false;
+    bool hasCJK_ = false;
 };
 
 // Convenience functions for quick translation access
