@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-03-09
+
+### Added
+
+- **Open submenu** — The "Open" action in the context menu now expands a right-popout submenu listing all containers in the active network. Master container pinned at top with gold text. Linked containers show tag name, filter name, or base form name. Navigate with Enter/A to enter, UP/DOWN to select, Enter/A to open. Mouse hover auto-shows the submenu. Supports network cycling — submenu updates when switching networks. Works from master, linked, sell, and air contexts. Scrollbar for networks with 8+ containers
+- **Container display names** — Linked containers show meaningful names on the HUD crosshair prompt and container UI title instead of generic "Chest". Master containers show "NetworkName: TagOrBaseName", sell containers show "Sell: TagOrBaseName", and tagged containers show their tag name. Names update on tag/rename/role changes and restore to base form name when a container is unlinked. Re-applied automatically on game load
+- **Intercept Container Activation toggle** — MCM Settings toggle (`bInterceptActivation`, default OFF) gates the activation hook's master/sell container interception. When OFF, activating master or sell containers opens them normally — use the context power for SLID actions. When ON, the legacy MessageBox flow fires on activation. Vendor NPC interception stays unconditional regardless of toggle
+- Context menu subtitle shows container identity when casting on a linked container — tag name if renamed, base form name otherwise. Combined with network name when available (e.g. "Breezehome — Armor Chest")
+- Context menu subtitle now shows sell container identity (tag name or base form name) — previously the sell context had no subtitle
+- Rename action added to master container context menu — was previously only available on linked and sell containers
+
+### Fixed
+
+- Create Link name suggestion defaulted to cell name even when a network with that name already existed (e.g. "Breezehome" suggested when "Breezehome" was taken). Now auto-increments to "Breezehome 2", "Breezehome 3", etc.
+- Welcome tutorial now triggers on the very first context power cast instead of mid-flow during Create Link or Set Sell. Blocks the context menu from appearing until dismissed
+- Whoosh deposited unrelated items (arrows, pickaxes, linen wraps, modded misc items) when filter families were partially checked. Family root filters — broad trait unions lacking FormType gates — were re-added to the effective filter set and matched items via COBJ-based traits (e.g. mod-added smelter breakdown recipes). Root filters now never participate in Whoosh matching; only explicitly checked child filters determine what gets deposited
+
 ## [1.3.1] - 2026-03-06
 
 ### Added

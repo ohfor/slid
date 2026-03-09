@@ -21,6 +21,9 @@ ScriptName SLID_MCM extends SKI_ConfigBase
 int _oidModEnabled
 int _oidDebugLogging
 
+; Settings page - Activation
+int _oidInterceptActivation
+
 ; Settings page - Container Picker
 int _oidIncludeUnlinkedContainers
 int _oidIncludeSCIEContainers
@@ -149,6 +152,7 @@ endEvent
 function ResetOptionIDs()
     _oidModEnabled = -1
     _oidDebugLogging = -1
+    _oidInterceptActivation = -1
     _oidIncludeUnlinkedContainers = -1
     _oidIncludeSCIEContainers = -1
     _oidSellPricePercent = -1
@@ -210,6 +214,10 @@ function RenderSettingsPage()
         scieFlag = OPTION_FLAG_NONE
     endif
     _oidIncludeSCIEContainers = AddToggleOption("$SLID_IncludeSCIEContainers", SLID_Native.GetIncludeSCIEContainers(), scieFlag)
+
+    AddEmptyOption()
+    AddHeaderOption("$SLID_HeaderActivation")
+    _oidInterceptActivation = AddToggleOption("$SLID_InterceptActivation", SLID_Native.GetInterceptActivation())
 endFunction
 
 ; =============================================================================
@@ -585,6 +593,13 @@ event OnOptionSelect(int a_option)
         return
     endif
 
+    if (a_option == _oidInterceptActivation)
+        bool newVal = !SLID_Native.GetInterceptActivation()
+        SLID_Native.SetInterceptActivation(newVal)
+        SetToggleOptionValue(a_option, newVal)
+        return
+    endif
+
     ; Text options (actions)
     if (a_option == _oidFontTest)
         ShowMessage("$SLID_FontTestClose", false)
@@ -951,6 +966,11 @@ event OnOptionHighlight(int a_option)
 
     if (a_option == _oidIncludeSCIEContainers)
         SetInfoText("$SLID_IncludeSCIEContainersDesc")
+        return
+    endif
+
+    if (a_option == _oidInterceptActivation)
+        SetInfoText("$SLID_InterceptActivationDesc")
         return
     endif
 

@@ -34,23 +34,30 @@ namespace ContextResolver {
                 {Action::kSort,      "$SLID_CtxSort",      "$SLID_CtxSortDesc"},
                 {Action::kSweep,     "$SLID_CtxSweep",     "$SLID_CtxSweepDesc"},
                 {Action::kConfigure, "$SLID_CtxConfigure", "$SLID_CtxConfigureDesc"},
+                {Action::kRename,  "$SLID_CtxRename",  "$SLID_CtxRenameDesc"},
                 {Action::kDestroyLink, "$SLID_CtxDestroyLink", "$SLID_CtxDestroyLinkDesc"},
             };
         }
 
-        std::vector<ActionEntry> BuildSellActions() {
-            return {
-                {Action::kSummary, "$SLID_CtxSummary", "$SLID_CtxSummaryDesc"},
-                {Action::kRename,  "$SLID_CtxRename",  "$SLID_CtxRenameDesc"},
-                {Action::kRemove,  "$SLID_CtxRemove",  "$SLID_CtxRemoveDesc"},
-            };
+        std::vector<ActionEntry> BuildSellActions(bool a_hasNetworks) {
+            std::vector<ActionEntry> actions;
+            if (a_hasNetworks) {
+                actions.push_back({Action::kOpen, "$SLID_CtxOpen", "$SLID_CtxOpenDesc"});
+            }
+            actions.push_back({Action::kSummary, "$SLID_CtxSummary", "$SLID_CtxSummaryDesc"});
+            actions.push_back({Action::kRename,  "$SLID_CtxRename",  "$SLID_CtxRenameDesc"});
+            actions.push_back({Action::kRemove,  "$SLID_CtxRemove",  "$SLID_CtxRemoveDesc"});
+            return actions;
         }
 
-        std::vector<ActionEntry> BuildKnownActions() {
-            return {
-                {Action::kRename, "$SLID_CtxRename", "$SLID_CtxRenameDesc"},
-                {Action::kRemove, "$SLID_CtxRemove", "$SLID_CtxRemoveDesc"},
-            };
+        std::vector<ActionEntry> BuildKnownActions(const std::string& a_networkName) {
+            std::vector<ActionEntry> actions;
+            if (!a_networkName.empty()) {
+                actions.push_back({Action::kOpen, "$SLID_CtxOpen", "$SLID_CtxOpenDesc"});
+            }
+            actions.push_back({Action::kRename, "$SLID_CtxRename", "$SLID_CtxRenameDesc"});
+            actions.push_back({Action::kRemove, "$SLID_CtxRemove", "$SLID_CtxRemoveDesc"});
+            return actions;
         }
 
         std::vector<ActionEntry> BuildContainerActions(bool a_hasNetworks, bool a_hasSell) {
@@ -153,9 +160,20 @@ namespace ContextResolver {
 
         // Sell container (checked first — sell wins over tagged)
         if (formID == mgr->GetSellContainerFormID()) {
-            logger::debug("ContextResolver: -> kSell");
             result.context = Context::kSell;
-            result.actions = BuildSellActions();
+            result.containerName = mgr->GetTagName(formID);
+            if (result.containerName.empty()) {
+                auto* base = ref->GetBaseObject();
+                if (base) result.containerName = base->GetName();
+            }
+            auto names = mgr->GetNetworkNames();
+            bool hasNetworks = !names.empty();
+            if (hasNetworks) {
+                result.cyclableNetworks = names;
+                result.networkName = names[0];
+            }
+            result.actions = BuildSellActions(hasNetworks);
+            logger::debug("ContextResolver: -> kSell (container='{}', hasNetworks={})", result.containerName, hasNetworks);
             return result;
         }
 
@@ -173,8 +191,14 @@ namespace ContextResolver {
         if (mgr->IsTagged(formID)) {
             result.context = Context::kKnown;
             result.networkName = FindNetworkForContainer(formID);
-            result.actions = BuildKnownActions();
-            logger::debug("ContextResolver: -> kKnown (tagged, net='{}')", result.networkName);
+            result.containerName = mgr->GetTagName(formID);
+            if (result.containerName.empty()) {
+                auto* base = ref->GetBaseObject();
+                if (base) result.containerName = base->GetName();
+            }
+            result.actions = BuildKnownActions(result.networkName);
+            logger::debug("ContextResolver: -> kKnown (tagged, net='{}', container='{}')",
+                          result.networkName, result.containerName);
             return result;
         }
 
@@ -183,8 +207,11 @@ namespace ContextResolver {
         if (!assignedNet.empty()) {
             result.context = Context::kKnown;
             result.networkName = assignedNet;
-            result.actions = BuildKnownActions();
-            logger::debug("ContextResolver: -> kKnown (filter-assigned, net='{}')", assignedNet);
+            auto* base = ref->GetBaseObject();
+            if (base) result.containerName = base->GetName();
+            result.actions = BuildKnownActions(assignedNet);
+            logger::debug("ContextResolver: -> kKnown (filter-assigned, net='{}', container='{}')",
+                          assignedNet, result.containerName);
             return result;
         }
 

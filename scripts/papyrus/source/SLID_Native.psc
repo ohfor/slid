@@ -72,6 +72,9 @@ Function SetVendorCost(int aiValue) global native
 bool Function GetSummonEnabled() global native
 Function SetSummonEnabled(bool abEnabled) global native
 
+bool Function GetInterceptActivation() global native
+Function SetInterceptActivation(bool abEnabled) global native
+
 bool Function GetShownWelcomeTutorial() global native
 Function SetShownWelcomeTutorial(bool abShown) global native
 

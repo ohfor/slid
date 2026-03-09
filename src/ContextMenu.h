@@ -9,7 +9,7 @@
 
 namespace ContextMenu {
 
-    using Callback = std::function<void(ContextResolver::Action, const std::string& networkName)>;
+    using Callback = std::function<void(ContextResolver::Action, const std::string& networkName, RE::FormID containerFormID)>;
 
     // Layout (centered popup, 1280x720 canvas)
     constexpr double POPUP_W = 260.0;
@@ -51,8 +51,24 @@ namespace ContextMenu {
     constexpr float    HOLD_DEAD_ZONE    = 0.2f;
     constexpr float    HOLD_DURATION     = 1.0f;
 
+    // Submenu layout
+    constexpr double SUBMENU_W           = 220.0;
+    constexpr double SUBMENU_GAP         = 4.0;
+    constexpr double SUBMENU_ROW_H       = 28.0;
+    constexpr double SUBMENU_PAD         = 12.0;
+    constexpr int    SUBMENU_MAX_VISIBLE = 8;
+
     // Hold mechanic types
     enum class HoldType { kNone, kHoldConfirm, kHoldReconfigure };
+
+    // Focus state for main vs submenu
+    enum class FocusState { kMain, kSubMenu };
+
+    struct SubMenuEntry {
+        RE::FormID  formID;
+        std::string name;
+        bool        isMaster;
+    };
 
     struct HoldConfig {
         uint32_t color;
@@ -117,6 +133,21 @@ namespace ContextMenu {
 
         double PopupH() const;
 
+        // Submenu
+        void BuildSubMenuEntries();
+        void DrawSubMenu();
+        void HideSubMenu();
+        void RedrawSubMenu();
+        void SubMenuCursorUp();
+        void SubMenuCursorDown();
+        void EnterSubMenu();
+        void ExitSubMenu();
+        void ConfirmSubMenu();
+        int  HitTestSubMenu(float a_mx, float a_my) const;
+        bool IsOnOpenRow() const;
+        void DrawChevron();
+        void UpdateSubMenuVisibility();
+
         ContextResolver::ResolvedContext m_context;
         Callback m_callback;
         int  m_cursor = 0;
@@ -131,6 +162,15 @@ namespace ContextMenu {
         double m_popupX  = 0.0;
         double m_popupY  = 0.0;
         double m_rowsY   = 0.0;  // Y offset of first action row (relative to popup)
+
+        // Submenu state
+        FocusState m_focus = FocusState::kMain;
+        std::vector<SubMenuEntry> m_subMenuEntries;
+        int  m_subMenuCursor = 0;
+        int  m_subMenuScroll = 0;
+        bool m_subMenuVisible = false;
+        double m_subMenuX = 0.0;
+        double m_subMenuY = 0.0;
 
         RE::GFxValue m_root;
 

@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.21)
 
 # ---- Versioning ----
 set(VERSION_MAJOR 1)
-set(VERSION_MINOR 3)
-set(VERSION_PATCH 1)
+set(VERSION_MINOR 4)
+set(VERSION_PATCH 0)
 
 # ---- Project ----
 project(
@@ -105,6 +105,7 @@ set(SOURCES
     src/RestockCategory.cpp
     src/RestockConfigMenu.cpp
     src/ButtonBar.cpp
+    src/DisplayName.cpp
 )
 
 set(HEADERS
@@ -154,6 +155,7 @@ set(HEADERS
     include/RestockCategory.h
     src/RestockConfigMenu.h
     include/ButtonBar.h
+    include/DisplayName.h
 )
 
 # ---- Create DLL ----

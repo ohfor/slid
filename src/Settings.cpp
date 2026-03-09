@@ -147,6 +147,8 @@ namespace Settings {
                     bDebugLogging = ParseBool(val, bDebugLogging);
                 } else if (key == "bShownWelcomeTutorial") {
                     bShownWelcomeTutorial = ParseBool(val, bShownWelcomeTutorial);
+                } else if (key == "bInterceptActivation") {
+                    bInterceptActivation = ParseBool(val, bInterceptActivation);
                 }
             } else if (currentSection == "Powers") {
                 if (key == "bSummonEnabled") {
@@ -382,6 +384,11 @@ namespace Settings {
         file << "; Has the user seen the welcome tutorial popup?\n";
         file << "; Set to false in MCM to show it again on next interaction.\n";
         file << "bShownWelcomeTutorial = " << (bShownWelcomeTutorial ? "true" : "false") << "\n";
+        file << "\n";
+        file << "; Intercept master/sell container activation with a SLID action menu.\n";
+        file << "; When false, containers open normally. Use context power for SLID actions.\n";
+        file << "; Default: false\n";
+        file << "bInterceptActivation = " << (bInterceptActivation ? "true" : "false") << "\n";
         file << "\n";
 
         file << "[Powers]\n";

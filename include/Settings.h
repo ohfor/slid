@@ -13,6 +13,7 @@ namespace Settings {
     inline bool bModEnabled = true;   // Master switch for mod functionality
     inline bool bDebugLogging = false;
     inline bool bShownWelcomeTutorial = false;  // Has user seen the welcome popup?
+    inline bool bInterceptActivation = false;  // Intercept master/sell activation with MessageBox
 
     // --- [Powers] ---
     inline bool bSummonEnabled = true;

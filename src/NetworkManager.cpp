@@ -1,4 +1,5 @@
 #include "NetworkManager.h"
+#include "DisplayName.h"
 #include "Settings.h"
 
 #include <algorithm>
@@ -37,17 +38,34 @@ bool NetworkManager::CreateNetwork(const std::string& a_name, RE::FormID a_maste
 }
 
 bool NetworkManager::RemoveNetwork(const std::string& a_name) {
-    std::lock_guard lock(m_lock);
+    RE::FormID masterFormID = 0;
 
-    auto it = std::find_if(m_networks.begin(), m_networks.end(),
-                           [&](const Network& n) { return n.name == a_name; });
-    if (it == m_networks.end()) {
-        logger::warn("Network '{}' not found", a_name);
-        return false;
+    {
+        std::lock_guard lock(m_lock);
+
+        auto it = std::find_if(m_networks.begin(), m_networks.end(),
+                               [&](const Network& n) { return n.name == a_name; });
+        if (it == m_networks.end()) {
+            logger::warn("Network '{}' not found", a_name);
+            return false;
+        }
+
+        masterFormID = it->masterFormID;
+        m_networks.erase(it);
+        logger::debug("Removed network '{}'", a_name);
     }
 
-    m_networks.erase(it);
-    logger::debug("Removed network '{}'", a_name);
+    // Update display name outside lock — re-apply if container still has a role, otherwise clear
+    if (masterFormID != 0) {
+        DisplayName::Apply(masterFormID);
+        // If Apply was a no-op (no remaining role), clear
+        if (FindNetworkByMaster(masterFormID).empty() &&
+            GetSellContainerFormID() != masterFormID &&
+            !IsTagged(masterFormID)) {
+            DisplayName::Clear(masterFormID);
+        }
+    }
+
     return true;
 }
 
@@ -126,6 +144,18 @@ void NetworkManager::SetRestockConfig(const std::string& a_networkName, const Re
 
 void NetworkManager::ClearAll() {
     std::lock_guard lock(m_lock);
+
+    // Clear display names before wiping data
+    for (const auto& net : m_networks) {
+        DisplayName::Clear(net.masterFormID);
+    }
+    for (const auto& [fid, tag] : m_tagRegistry) {
+        DisplayName::Clear(fid);
+    }
+    if (m_sellState.formID != 0) {
+        DisplayName::Clear(m_sellState.formID);
+    }
+
     m_networks.clear();
     m_tagRegistry.clear();
     m_recognizedMods.clear();
@@ -220,11 +250,25 @@ void NetworkManager::SetSellContainer(RE::FormID a_formID) {
 }
 
 void NetworkManager::ClearSellContainer() {
-    std::lock_guard lock(m_lock);
-    m_sellState.formID = 0;
-    m_sellState.timerStarted = false;
-    logger::info("ClearSellContainer: sell container cleared (lifetime: {} items, {} gold)",
-                 m_sellState.totalItemsSold, m_sellState.totalGoldEarned);
+    RE::FormID oldFormID = 0;
+
+    {
+        std::lock_guard lock(m_lock);
+        oldFormID = m_sellState.formID;
+        m_sellState.formID = 0;
+        m_sellState.timerStarted = false;
+        logger::info("ClearSellContainer: sell container cleared (lifetime: {} items, {} gold)",
+                     m_sellState.totalItemsSold, m_sellState.totalGoldEarned);
+    }
+
+    // Update display name outside lock — re-apply if container still has a role, otherwise clear
+    if (oldFormID != 0) {
+        DisplayName::Apply(oldFormID);
+        if (FindNetworkByMaster(oldFormID).empty() &&
+            !IsTagged(oldFormID)) {
+            DisplayName::Clear(oldFormID);
+        }
+    }
 }
 
 RE::FormID NetworkManager::GetSellContainerFormID() const {
@@ -1393,6 +1437,15 @@ bool NetworkManager::ActivatePreset(const std::string& a_name) {
     // Set restock config
     if (preset->restockConfig.configured) {
         SetRestockConfig(a_name, preset->restockConfig);
+    }
+
+    // Apply display names for master and all tagged containers
+    DisplayName::Apply(preset->resolvedMasterFormID);
+    for (const auto& tag : preset->tags) {
+        auto fid = ParseFormIDRef(tag.containerRef, dh);
+        if (fid != 0) {
+            DisplayName::Apply(fid);
+        }
     }
 
     logger::info("ActivatePreset: activated '{}' with {} filters, {} tags",

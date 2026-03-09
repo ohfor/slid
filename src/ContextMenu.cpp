@@ -1,4 +1,6 @@
 #include "ContextMenu.h"
+#include "FilterRegistry.h"
+#include "NetworkManager.h"
 #include "TranslationService.h"
 
 namespace ContextMenu {
@@ -100,9 +102,9 @@ namespace ContextMenu {
     }
 
     double Menu::PopupH() const {
-        // Title + network (if cyclable) + separator + rows + separator + description
+        // Title + network/container subtitle (if any) + separator + rows + separator + description
         double h = PAD + TITLE_H;
-        if (!m_context.cyclableNetworks.empty()) {
+        if (!m_context.cyclableNetworks.empty() || !m_context.networkName.empty() || !m_context.containerName.empty()) {
             h += NETWORK_H;
         }
         h += SEP_H + 4.0;  // separator + small gap
@@ -117,6 +119,10 @@ namespace ContextMenu {
         if (!uiMovie) return;
 
         m_cursor = 0;
+        m_focus = FocusState::kMain;
+        m_subMenuVisible = false;
+        m_subMenuCursor = 0;
+        m_subMenuScroll = 0;
 
         RE::GRectF rect = uiMovie->GetVisibleFrameRect();
         double screenW = rect.right - rect.left;
@@ -138,6 +144,11 @@ namespace ContextMenu {
         DrawActionRows();
         DrawCursorHighlight();
         DrawDescription();
+        DrawChevron();
+
+        // Build submenu entries and auto-show if cursor starts on Open
+        BuildSubMenuEntries();
+        UpdateSubMenuVisibility();
     }
 
     void Menu::DrawBackground() {
@@ -177,16 +188,20 @@ namespace ContextMenu {
     }
 
     void Menu::DrawNetworkSubtitle() {
-        if (m_context.cyclableNetworks.empty() && m_context.networkName.empty()) return;
+        if (m_context.cyclableNetworks.empty() && m_context.networkName.empty() && m_context.containerName.empty()) return;
 
         double x = m_popupX + PAD;
         double y = m_popupY + PAD + TITLE_H;
 
         std::string text;
         if (m_context.cyclableNetworks.size() > 1) {
-            text = "\x3C " + m_context.networkName + " \x3E";  // < Name >
-        } else {
+            text = "\x3C " + m_context.networkName + " \x3E";  // < Name > (no container suffix when cycling)
+        } else if (!m_context.networkName.empty() && !m_context.containerName.empty()) {
+            text = m_context.networkName + " \xE2\x80\x94 " + m_context.containerName;  // em-dash
+        } else if (!m_context.networkName.empty()) {
             text = m_context.networkName;
+        } else {
+            text = m_context.containerName;
         }
 
         ScaleformUtil::CreateLabel(uiMovie.get(), "ctx_network", 21,
@@ -277,7 +292,7 @@ namespace ContextMenu {
 
     void Menu::DrawActionRows() {
         double yBase = PAD + TITLE_H;
-        if (!m_context.cyclableNetworks.empty() || !m_context.networkName.empty()) {
+        if (!m_context.cyclableNetworks.empty() || !m_context.networkName.empty() || !m_context.containerName.empty()) {
             yBase += NETWORK_H;
         }
         yBase += SEP_H + 4.0;
@@ -365,8 +380,20 @@ namespace ContextMenu {
     void Menu::RedrawDescription() {
         if (!uiMovie || m_context.actions.empty()) return;
 
-        auto& entry = m_context.actions[m_cursor];
-        std::string text = BuildDescriptionText(entry);
+        std::string text;
+        if (m_focus == FocusState::kSubMenu &&
+            m_subMenuCursor >= 0 &&
+            m_subMenuCursor < static_cast<int>(m_subMenuEntries.size())) {
+            // Show container name in description when browsing submenu
+            auto& entry = m_subMenuEntries[m_subMenuCursor];
+            text = entry.name;
+            if (entry.isMaster) {
+                text += " (Master)";
+            }
+        } else {
+            auto& entry = m_context.actions[m_cursor];
+            text = BuildDescriptionText(entry);
+        }
 
         RE::GFxValue field;
         uiMovie->GetVariable(&field, "_root.ctx_desc");
@@ -446,6 +473,12 @@ namespace ContextMenu {
         if (!g_activeMenu || g_activeMenu->m_context.actions.empty()) return;
         auto& m = *g_activeMenu;
 
+        // In submenu, confirm acts directly (no hold)
+        if (m.m_focus == FocusState::kSubMenu) {
+            m.ConfirmSubMenu();
+            return;
+        }
+
         auto action = m.m_context.actions[m.m_cursor].action;
         auto holdType = GetHoldType(action);
 
@@ -499,7 +532,7 @@ namespace ContextMenu {
                 auto callback = m.m_callback;
                 Hide();
                 if (callback) {
-                    callback(configAction, networkName);
+                    callback(configAction, networkName, 0);
                 }
             }
         }
@@ -594,17 +627,418 @@ namespace ContextMenu {
         }
     }
 
+    // --- Submenu ---
+
+    bool Menu::IsOnOpenRow() const {
+        if (m_cursor < 0 || m_cursor >= static_cast<int>(m_context.actions.size())) return false;
+        return m_context.actions[m_cursor].action == ContextResolver::Action::kOpen;
+    }
+
+    void Menu::BuildSubMenuEntries() {
+        m_subMenuEntries.clear();
+        if (m_context.networkName.empty()) return;
+
+        auto* mgr = NetworkManager::GetSingleton();
+        auto* net = mgr->FindNetwork(m_context.networkName);
+        if (!net) return;
+
+        std::unordered_set<RE::FormID> seen;
+
+        // 1. Master — always first, gold
+        if (net->masterFormID != 0) {
+            SubMenuEntry master;
+            master.formID = net->masterFormID;
+            master.isMaster = true;
+
+            auto tagName = mgr->GetTagName(net->masterFormID);
+            if (!tagName.empty()) {
+                master.name = tagName;
+            } else {
+                auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(net->masterFormID);
+                if (ref) {
+                    auto* base = ref->GetBaseObject();
+                    if (base) master.name = base->GetName();
+                }
+            }
+            if (master.name.empty()) master.name = "Master";
+
+            m_subMenuEntries.push_back(std::move(master));
+            seen.insert(net->masterFormID);
+        }
+
+        // 2. Filter-assigned containers
+        for (const auto& stage : net->filters) {
+            if (stage.containerFormID == 0 || seen.count(stage.containerFormID)) continue;
+            seen.insert(stage.containerFormID);
+
+            SubMenuEntry entry;
+            entry.formID = stage.containerFormID;
+            entry.isMaster = false;
+
+            auto tagName = mgr->GetTagName(stage.containerFormID);
+            if (!tagName.empty()) {
+                entry.name = tagName;
+            } else {
+                auto* filter = FilterRegistry::GetSingleton()->GetFilter(stage.filterID);
+                if (filter) {
+                    entry.name = std::string(filter->GetDisplayName());
+                } else {
+                    auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(stage.containerFormID);
+                    if (ref) {
+                        auto* base = ref->GetBaseObject();
+                        if (base) entry.name = base->GetName();
+                    }
+                }
+            }
+            if (entry.name.empty()) entry.name = "Container";
+
+            m_subMenuEntries.push_back(std::move(entry));
+        }
+
+        // 3. Catch-all if non-zero and not already present
+        if (net->catchAllFormID != 0 && !seen.count(net->catchAllFormID)) {
+            SubMenuEntry entry;
+            entry.formID = net->catchAllFormID;
+            entry.isMaster = false;
+
+            auto tagName = mgr->GetTagName(net->catchAllFormID);
+            if (!tagName.empty()) {
+                entry.name = tagName;
+            } else {
+                auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(net->catchAllFormID);
+                if (ref) {
+                    auto* base = ref->GetBaseObject();
+                    if (base) entry.name = base->GetName();
+                }
+            }
+            if (entry.name.empty()) entry.name = "Catch-All";
+
+            m_subMenuEntries.push_back(std::move(entry));
+        }
+    }
+
+    void Menu::DrawSubMenu() {
+        if (!uiMovie || m_subMenuEntries.empty()) return;
+
+        int entryCount = static_cast<int>(m_subMenuEntries.size());
+        int visibleCount = std::min(entryCount, SUBMENU_MAX_VISIBLE);
+        double subH = SUBMENU_PAD * 2 + static_cast<double>(visibleCount) * SUBMENU_ROW_H;
+
+        // Position: right of main popup, aligned with Open row
+        RE::GRectF rect = uiMovie->GetVisibleFrameRect();
+        double screenW = rect.right - rect.left;
+        double screenH = rect.bottom - rect.top;
+        if (screenW <= 0) screenW = 1280.0;
+        if (screenH <= 0) screenH = 720.0;
+
+        double openRowY = m_popupY + m_rowsY + static_cast<double>(m_cursor) * ROW_H;
+        m_subMenuX = m_popupX + POPUP_W + SUBMENU_GAP;
+        m_subMenuY = openRowY;
+
+        // Flip to left if off-screen right
+        if (m_subMenuX + SUBMENU_W > screenW) {
+            m_subMenuX = m_popupX - SUBMENU_GAP - SUBMENU_W;
+        }
+
+        // Clamp Y
+        if (m_subMenuY + subH > screenH) {
+            m_subMenuY = screenH - subH;
+        }
+        if (m_subMenuY < 0) m_subMenuY = 0;
+
+        m_subMenuVisible = true;
+
+        // Outer glow
+        constexpr struct { double spread; int alpha; } glowLayers[] = {
+            {10.0, 6}, {8.0, 10}, {6.0, 14}, {4.0, 20}, {2.0, 28}
+        };
+        for (int i = 0; i < 5; ++i) {
+            double s = glowLayers[i].spread;
+            std::string name = "ctx_sub_glow" + std::to_string(i);
+            ScaleformUtil::DrawFilledRect(uiMovie.get(), name.c_str(), 60 + i,
+                m_subMenuX - s, m_subMenuY - s, SUBMENU_W + s * 2, subH + s * 2,
+                0x000000, glowLayers[i].alpha);
+        }
+
+        // Background
+        ScaleformUtil::DrawFilledRect(uiMovie.get(), "ctx_sub_bg", 65,
+            m_subMenuX, m_subMenuY, SUBMENU_W, subH, COLOR_BG, ALPHA_BG);
+
+        // Border
+        ScaleformUtil::DrawBorderRect(uiMovie.get(), "ctx_sub_border", 66,
+            m_subMenuX, m_subMenuY, SUBMENU_W, subH, COLOR_BORDER);
+
+        // Accent line
+        ScaleformUtil::DrawFilledRect(uiMovie.get(), "ctx_sub_accent", 67,
+            m_subMenuX, m_subMenuY, SUBMENU_W, 2.0, COLOR_CURSOR, 90);
+
+        // Rows
+        RedrawSubMenu();
+    }
+
+    void Menu::HideSubMenu() {
+        if (!uiMovie) return;
+        m_subMenuVisible = false;
+
+        // Remove all submenu clips (destroy for clean rebuild on network cycle)
+        auto removeClip = [&](const char* a_path) {
+            RE::GFxValue clip;
+            uiMovie->GetVariable(&clip, a_path);
+            if (clip.IsDisplayObject()) {
+                clip.Invoke("removeMovieClip");
+            }
+        };
+
+        auto removeTextField = [&](const char* a_path) {
+            RE::GFxValue tf;
+            uiMovie->GetVariable(&tf, a_path);
+            if (tf.IsDisplayObject()) {
+                tf.Invoke("removeTextField");
+            }
+        };
+
+        for (int i = 0; i < 5; ++i) {
+            std::string path = "_root.ctx_sub_glow" + std::to_string(i);
+            removeClip(path.c_str());
+        }
+
+        const char* clips[] = {"ctx_sub_bg", "ctx_sub_border", "ctx_sub_accent",
+                                "ctx_sub_cursor_bg", "ctx_sub_cursor"};
+        for (auto* c : clips) {
+            std::string path = std::string("_root.") + c;
+            removeClip(path.c_str());
+        }
+
+        // Remove row labels (text fields)
+        for (int i = 0; i < SUBMENU_MAX_VISIBLE; ++i) {
+            std::string path = "_root.ctx_sub_row" + std::to_string(i);
+            removeTextField(path.c_str());
+        }
+
+        // Remove scrollbar
+        removeClip("_root.ctx_sub_scrollbar");
+    }
+
+    void Menu::RedrawSubMenu() {
+        if (!uiMovie || m_subMenuEntries.empty() || !m_subMenuVisible) return;
+
+        int entryCount = static_cast<int>(m_subMenuEntries.size());
+        int visibleCount = std::min(entryCount, SUBMENU_MAX_VISIBLE);
+
+        constexpr double fontSize = 14.0;
+        constexpr double textVPad = (SUBMENU_ROW_H - fontSize) / 2.0 - 2.5;
+
+        bool inSubMenu = (m_focus == FocusState::kSubMenu);
+
+        for (int i = 0; i < visibleCount; ++i) {
+            int dataIdx = m_subMenuScroll + i;
+            if (dataIdx >= entryCount) break;
+
+            auto& entry = m_subMenuEntries[dataIdx];
+            double rowY = m_subMenuY + SUBMENU_PAD + static_cast<double>(i) * SUBMENU_ROW_H;
+
+            std::string name = "ctx_sub_row" + std::to_string(i);
+
+            uint32_t color;
+            if (entry.isMaster) {
+                color = COLOR_NETWORK;  // gold
+            } else if (inSubMenu && dataIdx == m_subMenuCursor) {
+                color = COLOR_ROW_SELECTED;
+            } else {
+                color = COLOR_ROW_NORMAL;
+            }
+
+            // Dim text when not focused
+            int alpha = inSubMenu ? 100 : 60;
+
+            std::string displayName = entry.name;
+            if (entry.isMaster) {
+                displayName += " *";
+            }
+
+            ScaleformUtil::CreateLabel(uiMovie.get(), name.c_str(), 70 + i,
+                m_subMenuX + SUBMENU_PAD, rowY + textVPad,
+                SUBMENU_W - SUBMENU_PAD * 2, SUBMENU_ROW_H,
+                displayName.c_str(), 14, color);
+
+            // Apply alpha
+            RE::GFxValue tf;
+            uiMovie->GetVariable(&tf, ("_root." + name).c_str());
+            if (tf.IsDisplayObject()) {
+                RE::GFxValue aVal; aVal.SetNumber(static_cast<double>(alpha));
+                tf.SetMember("_alpha", aVal);
+            }
+        }
+
+        // Cursor highlight (only when focused)
+        if (inSubMenu && m_subMenuCursor >= m_subMenuScroll &&
+            m_subMenuCursor < m_subMenuScroll + visibleCount) {
+            int visIdx = m_subMenuCursor - m_subMenuScroll;
+            double rowY = m_subMenuY + SUBMENU_PAD + static_cast<double>(visIdx) * SUBMENU_ROW_H;
+
+            ScaleformUtil::DrawFilledRect(uiMovie.get(), "ctx_sub_cursor_bg", 78,
+                m_subMenuX + SUBMENU_PAD - 2.0, rowY,
+                SUBMENU_W - SUBMENU_PAD * 2 + 4.0, SUBMENU_ROW_H,
+                COLOR_CURSOR_BG, ALPHA_CURSOR);
+
+            ScaleformUtil::DrawFilledRect(uiMovie.get(), "ctx_sub_cursor", 79,
+                m_subMenuX + SUBMENU_PAD, rowY + 4.0,
+                CURSOR_W, SUBMENU_ROW_H - 8.0,
+                COLOR_CURSOR, 100);
+        } else {
+            // Hide cursor if not focused
+            RE::GFxValue cbg, cur;
+            uiMovie->GetVariable(&cbg, "_root.ctx_sub_cursor_bg");
+            uiMovie->GetVariable(&cur, "_root.ctx_sub_cursor");
+            if (cbg.IsDisplayObject()) {
+                RE::GFxValue val; val.SetBoolean(false);
+                cbg.SetMember("_visible", val);
+            }
+            if (cur.IsDisplayObject()) {
+                RE::GFxValue val; val.SetBoolean(false);
+                cur.SetMember("_visible", val);
+            }
+        }
+
+        // Scrollbar
+        if (entryCount > SUBMENU_MAX_VISIBLE) {
+            double subH = SUBMENU_PAD * 2 + static_cast<double>(visibleCount) * SUBMENU_ROW_H;
+            double trackH = subH - SUBMENU_PAD * 2;
+            double thumbH = trackH * (static_cast<double>(visibleCount) / static_cast<double>(entryCount));
+            if (thumbH < 10.0) thumbH = 10.0;
+            double thumbY = m_subMenuY + SUBMENU_PAD +
+                (trackH - thumbH) * (static_cast<double>(m_subMenuScroll) /
+                static_cast<double>(entryCount - visibleCount));
+
+            ScaleformUtil::DrawFilledRect(uiMovie.get(), "ctx_sub_scrollbar", 80,
+                m_subMenuX + SUBMENU_W - 4.0, thumbY, 2.0, thumbH, COLOR_CHEVRON, 60);
+        }
+    }
+
+    void Menu::SubMenuCursorUp() {
+        if (m_subMenuEntries.empty()) return;
+        if (m_subMenuCursor > 0) {
+            m_subMenuCursor--;
+            if (m_subMenuCursor < m_subMenuScroll) {
+                m_subMenuScroll = m_subMenuCursor;
+            }
+            RedrawSubMenu();
+            RedrawDescription();
+        }
+    }
+
+    void Menu::SubMenuCursorDown() {
+        if (m_subMenuEntries.empty()) return;
+        int maxIdx = static_cast<int>(m_subMenuEntries.size()) - 1;
+        if (m_subMenuCursor < maxIdx) {
+            m_subMenuCursor++;
+            int visibleCount = std::min(static_cast<int>(m_subMenuEntries.size()), SUBMENU_MAX_VISIBLE);
+            if (m_subMenuCursor >= m_subMenuScroll + visibleCount) {
+                m_subMenuScroll = m_subMenuCursor - visibleCount + 1;
+            }
+            RedrawSubMenu();
+            RedrawDescription();
+        }
+    }
+
+    void Menu::EnterSubMenu() {
+        if (m_subMenuEntries.empty() || !IsOnOpenRow()) return;
+        m_focus = FocusState::kSubMenu;
+        m_subMenuCursor = 0;
+        m_subMenuScroll = 0;
+        RedrawSubMenu();
+        RedrawDescription();
+    }
+
+    void Menu::ExitSubMenu() {
+        m_focus = FocusState::kMain;
+        RedrawSubMenu();
+        RedrawDescription();
+    }
+
+    void Menu::ConfirmSubMenu() {
+        if (m_subMenuCursor < 0 || m_subMenuCursor >= static_cast<int>(m_subMenuEntries.size())) return;
+
+        auto& entry = m_subMenuEntries[m_subMenuCursor];
+        auto networkName = m_context.networkName;
+        auto callback = m_callback;
+        auto formID = entry.formID;
+
+        Hide();
+
+        if (callback) {
+            callback(ContextResolver::Action::kOpen, networkName, formID);
+        }
+    }
+
+    int Menu::HitTestSubMenu(float a_mx, float a_my) const {
+        if (!m_subMenuVisible || m_subMenuEntries.empty()) return -1;
+
+        int entryCount = static_cast<int>(m_subMenuEntries.size());
+        int visibleCount = std::min(entryCount, SUBMENU_MAX_VISIBLE);
+
+        double localX = a_mx - m_subMenuX;
+        double localY = a_my - m_subMenuY - SUBMENU_PAD;
+
+        if (localX < 0 || localX > SUBMENU_W) return -1;
+        if (localY < 0) return -1;
+
+        int row = static_cast<int>(localY / SUBMENU_ROW_H);
+        if (row >= 0 && row < visibleCount) {
+            int dataIdx = m_subMenuScroll + row;
+            if (dataIdx < entryCount) return dataIdx;
+        }
+        return -1;
+    }
+
+    void Menu::UpdateSubMenuVisibility() {
+        bool shouldShow = IsOnOpenRow() && !m_subMenuEntries.empty();
+        if (shouldShow && !m_subMenuVisible) {
+            DrawSubMenu();
+        } else if (!shouldShow && m_subMenuVisible) {
+            if (m_focus == FocusState::kSubMenu) {
+                ExitSubMenu();
+            }
+            HideSubMenu();
+        }
+    }
+
+    void Menu::DrawChevron() {
+        if (!uiMovie) return;
+
+        // Find the Open row index
+        for (size_t i = 0; i < m_context.actions.size(); ++i) {
+            if (m_context.actions[i].action == ContextResolver::Action::kOpen) {
+                double rowY = m_popupY + m_rowsY + static_cast<double>(i) * ROW_H;
+                constexpr double fontSize = 14.0;
+                constexpr double textVPad = (ROW_H - fontSize) / 2.0 - 2.5;
+
+                ScaleformUtil::CreateLabel(uiMovie.get(), "ctx_open_chevron", 49,
+                    m_popupX + POPUP_W - PAD - 12.0, rowY + textVPad, 12.0, ROW_H,
+                    ">", 14, COLOR_CHEVRON);
+                break;
+            }
+        }
+    }
+
     // --- Input actions ---
 
     void Menu::CursorUp() {
         if (!g_activeMenu || g_activeMenu->m_context.actions.empty()) return;
         auto& m = *g_activeMenu;
         CancelHold();
+
+        if (m.m_focus == FocusState::kSubMenu) {
+            m.SubMenuCursorUp();
+            return;
+        }
+
         if (m.m_cursor > 0) {
             m.m_cursor--;
             m.RedrawActionRows();
             m.UpdateCursorHighlight();
             m.RedrawDescription();
+            m.UpdateSubMenuVisibility();
         }
     }
 
@@ -612,12 +1046,19 @@ namespace ContextMenu {
         if (!g_activeMenu || g_activeMenu->m_context.actions.empty()) return;
         auto& m = *g_activeMenu;
         CancelHold();
+
+        if (m.m_focus == FocusState::kSubMenu) {
+            m.SubMenuCursorDown();
+            return;
+        }
+
         int maxIdx = static_cast<int>(m.m_context.actions.size()) - 1;
         if (m.m_cursor < maxIdx) {
             m.m_cursor++;
             m.RedrawActionRows();
             m.UpdateCursorHighlight();
             m.RedrawDescription();
+            m.UpdateSubMenuVisibility();
         }
     }
 
@@ -625,6 +1066,13 @@ namespace ContextMenu {
         if (!g_activeMenu) return;
         auto& m = *g_activeMenu;
         CancelHold();
+
+        // LEFT in submenu → exit to main
+        if (m.m_focus == FocusState::kSubMenu) {
+            m.ExitSubMenu();
+            return;
+        }
+
         if (m.m_context.cyclableNetworks.size() <= 1) return;
 
         // Find current index
@@ -636,12 +1084,25 @@ namespace ContextMenu {
         idx = (idx == 0) ? nets.size() - 1 : idx - 1;
         m.m_context.networkName = nets[idx];
         m.RedrawNetworkSubtitle();
+
+        // Rebuild submenu for new network
+        m.BuildSubMenuEntries();
+        if (m.m_subMenuVisible) {
+            m.m_subMenuCursor = 0;
+            m.m_subMenuScroll = 0;
+            m.HideSubMenu();
+            m.DrawSubMenu();
+        }
     }
 
     void Menu::CycleRight() {
         if (!g_activeMenu) return;
         auto& m = *g_activeMenu;
         CancelHold();
+
+        // Don't cycle networks from within submenu
+        if (m.m_focus == FocusState::kSubMenu) return;
+
         if (m.m_context.cyclableNetworks.size() <= 1) return;
 
         auto& nets = m.m_context.cyclableNetworks;
@@ -651,20 +1112,42 @@ namespace ContextMenu {
         idx = (idx + 1) % nets.size();
         m.m_context.networkName = nets[idx];
         m.RedrawNetworkSubtitle();
+
+        // Rebuild submenu for new network
+        m.BuildSubMenuEntries();
+        if (m.m_subMenuVisible) {
+            m.m_subMenuCursor = 0;
+            m.m_subMenuScroll = 0;
+            m.HideSubMenu();
+            m.DrawSubMenu();
+        }
     }
 
     void Menu::Confirm() {
         if (!g_activeMenu || g_activeMenu->m_context.actions.empty()) return;
         auto& m = *g_activeMenu;
 
+        // If in submenu, confirm submenu selection
+        if (m.m_focus == FocusState::kSubMenu) {
+            m.ConfirmSubMenu();
+            return;
+        }
+
         auto action = m.m_context.actions[m.m_cursor].action;
+
+        // On Open row, enter submenu instead of direct confirm
+        if (action == ContextResolver::Action::kOpen && !m.m_subMenuEntries.empty()) {
+            m.EnterSubMenu();
+            return;
+        }
+
         auto networkName = m.m_context.networkName;
         auto callback = m.m_callback;
 
         Hide();
 
         if (callback) {
-            callback(action, networkName);
+            callback(action, networkName, 0);
         }
     }
 
@@ -682,13 +1165,40 @@ namespace ContextMenu {
         float mx = static_cast<float>(xVal.GetNumber());
         float my = static_cast<float>(yVal.GetNumber());
 
+        // Check submenu hit first
+        if (m.m_subMenuVisible) {
+            int subHit = m.HitTestSubMenu(mx, my);
+            if (subHit >= 0) {
+                // Auto-enter submenu on hover
+                if (m.m_focus != FocusState::kSubMenu) {
+                    m.m_focus = FocusState::kSubMenu;
+                }
+                if (subHit != m.m_subMenuCursor) {
+                    m.m_subMenuCursor = subHit;
+                    m.RedrawSubMenu();
+                    m.RedrawDescription();
+                }
+                return;
+            }
+        }
+
+        // Check main menu hit
         int hit = m.HitTestRow(mx, my);
-        if (hit >= 0 && hit != m.m_cursor) {
-            CancelHold();
-            m.m_cursor = hit;
-            m.RedrawActionRows();
-            m.UpdateCursorHighlight();
-            m.RedrawDescription();
+        if (hit >= 0) {
+            // Return to main focus if was in submenu
+            if (m.m_focus == FocusState::kSubMenu) {
+                m.m_focus = FocusState::kMain;
+                m.RedrawSubMenu();
+            }
+
+            if (hit != m.m_cursor) {
+                CancelHold();
+                m.m_cursor = hit;
+                m.RedrawActionRows();
+                m.UpdateCursorHighlight();
+                m.RedrawDescription();
+                m.UpdateSubMenuVisibility();
+            }
         }
     }
 
@@ -707,12 +1217,25 @@ namespace ContextMenu {
         float mx = static_cast<float>(xVal.GetNumber());
         float my = static_cast<float>(yVal.GetNumber());
 
+        // Check submenu click first
+        if (m.m_subMenuVisible) {
+            int subHit = m.HitTestSubMenu(mx, my);
+            if (subHit >= 0) {
+                m.m_focus = FocusState::kSubMenu;
+                m.m_subMenuCursor = subHit;
+                m.RedrawSubMenu();
+                m.ConfirmSubMenu();
+                return;
+            }
+        }
+
         int hit = m.HitTestRow(mx, my);
         if (hit >= 0) {
             m.m_cursor = hit;
             m.RedrawActionRows();
             m.UpdateCursorHighlight();
             m.RedrawDescription();
+            m.UpdateSubMenuVisibility();
             BeginHold();  // BeginHold fires Confirm immediately for kNone actions
             return;
         }
@@ -731,10 +1254,18 @@ namespace ContextMenu {
             }
         }
 
-        // Click outside popup = cancel
+        // Click outside both popups = cancel
         double popupH = m.PopupH();
-        if (mx < m.m_popupX || mx > m.m_popupX + POPUP_W ||
-            my < m.m_popupY || my > m.m_popupY + popupH) {
+        bool inMain = (mx >= m.m_popupX && mx <= m.m_popupX + POPUP_W &&
+                       my >= m.m_popupY && my <= m.m_popupY + popupH);
+        bool inSub = false;
+        if (m.m_subMenuVisible) {
+            int visCount = std::min(static_cast<int>(m.m_subMenuEntries.size()), SUBMENU_MAX_VISIBLE);
+            double subH = SUBMENU_PAD * 2 + static_cast<double>(visCount) * SUBMENU_ROW_H;
+            inSub = (mx >= m.m_subMenuX && mx <= m.m_subMenuX + SUBMENU_W &&
+                     my >= m.m_subMenuY && my <= m.m_subMenuY + subH);
+        }
+        if (!inMain && !inSub) {
             Cancel();
         }
     }

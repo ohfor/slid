@@ -249,6 +249,11 @@ namespace ActivationHook {
                 return _originalActivateRef(a_this, a_activator, a_arg2, a_object, a_count, a_defaultProcessingOnly);
             }
 
+            // Activation interception disabled — pass through to normal container open
+            if (!Settings::bInterceptActivation) {
+                return _originalActivateRef(a_this, a_activator, a_arg2, a_object, a_count, a_defaultProcessingOnly);
+            }
+
             // Check roles for this container
             auto* mgr = NetworkManager::GetSingleton();
             auto networkName = mgr->FindNetworkByMaster(thisID);

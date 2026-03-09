@@ -79,7 +79,7 @@ namespace WelcomeMenu {
                                                RE::BSTEventSource<RE::InputEvent*>* a_source) override;
     };
 
-    // Call at potential trigger points
-    void TryShowWelcome();
+    // Call at potential trigger points — returns true if welcome will be shown
+    bool TryShowWelcome();
 
 }  // namespace WelcomeMenu

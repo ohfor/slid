@@ -44,6 +44,7 @@ namespace ContextResolver {
     struct ResolvedContext {
         Context                  context;
         std::string              networkName;       // locked or first cyclable
+        std::string              containerName;     // tag name or base form name (kKnown only)
         std::vector<std::string> cyclableNetworks;  // empty = locked to networkName
         std::vector<ActionEntry> actions;
         RE::FormID               targetFormID = 0;

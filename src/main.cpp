@@ -21,6 +21,7 @@
 #include "ContextMenu.h"
 #include "ContainerRegistry.h"
 #include "ContainerRegistryTest.h"
+#include "DisplayName.h"
 
 // Container source registration functions (defined in source files)
 void RegisterSpecialContainerSource();
@@ -252,6 +253,8 @@ namespace {
                 }
                 // Load network/tag/sell config from INI (mod author presets — only adds missing entries)
                 NetworkManager::GetSingleton()->LoadConfigFromINI();
+                // Set display names on all SLID containers (master, sell, tagged)
+                DisplayName::ApplyAll();
                 // Reset vendor dialogue globals (safety — stale values from previous session)
                 ResetVendorGlobals();
 
@@ -273,6 +276,7 @@ namespace {
                 SummonChest::Clear();
                 // Load network/tag/sell config from INI (mod author presets)
                 NetworkManager::GetSingleton()->LoadConfigFromINI();
+                DisplayName::ApplyAll();
                 ResetVendorGlobals();
                 GrantPowers();
                 if (auto* quest = RE::TESForm::LookupByEditorID<RE::TESQuest>("SLID_VendorQuest")) {

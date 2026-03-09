@@ -1,4 +1,5 @@
 #include "TagInputMenu.h"
+#include "DisplayName.h"
 #include "Feedback.h"
 #include "NetworkManager.h"
 #include "ScaleformUtil.h"
@@ -1103,6 +1104,7 @@ namespace TagInputMenu {
         // Default mode: tag a container
         auto* mgr = NetworkManager::GetSingleton();
         mgr->TagContainer(s_pendingFormID, a_name);
+        DisplayName::Apply(s_pendingFormID);
 
         std::string msg = s_isRename
             ? TF("$SLID_NotifyRenamed", a_name)

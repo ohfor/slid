@@ -20,6 +20,7 @@
 #include "SellOverviewMenu.h"
 #include "WhooshConfigMenu.h"
 #include "RestockConfigMenu.h"
+#include "DisplayName.h"
 
 #include <random>
 
@@ -182,6 +183,8 @@ namespace ConsoleCommands {
                         }
 
                         if (mgr2->CreateNetwork(finalName, formID)) {
+                            DisplayName::Apply(formID);
+
                             auto* ref2 = RE::TESForm::LookupByID<RE::TESObjectREFR>(formID);
                             if (ref2) {
                                 Feedback::OnSetMaster(ref2);
@@ -193,8 +196,6 @@ namespace ConsoleCommands {
                             logger::info("SetMasterAuto: created network '{}' with master {:08X}",
                                          finalName, formID);
 
-                            // Show welcome tutorial (first time only), then open config menu
-                            WelcomeMenu::TryShowWelcome();
                             auto networkName = finalName;
                             SKSE::GetTaskInterface()->AddTask([networkName]() {
                                 SLIDMenu::ConfigMenu::Show(networkName);
@@ -206,6 +207,8 @@ namespace ConsoleCommands {
 
         // --- Native functions ---
 
+        // Legacy path — called from old SetMaster power (SPEL 0x801, retained for save compat).
+        // Active path is DoCreateLink() via context menu's Create Link action.
         RE::BSFixedString SetMasterAuto(RE::StaticFunctionTag*) {
             auto* ref = GetCapturedTarget();
             if (!ref) {
@@ -252,7 +255,7 @@ namespace ConsoleCommands {
                 return RE::BSFixedString(existingNet.c_str());
             }
 
-            // Get cell name as default suggestion
+            // Get cell name as default suggestion, dedup if already taken
             auto* cell = ref->GetParentCell();
             std::string baseName;
             if (cell && cell->GetFullName() && cell->GetFullName()[0] != '\0') {
@@ -261,12 +264,21 @@ namespace ConsoleCommands {
                 baseName = "Storage";
             }
 
+            auto existingNames = mgr->GetNetworkNames();
+            std::string suggestion = baseName;
+            int suffix = 2;
+            while (std::find(existingNames.begin(), existingNames.end(), suggestion) != existingNames.end()) {
+                suggestion = baseName + " " + std::to_string(suffix++);
+            }
+
             // Show naming popup — network is created when user confirms
-            ShowNetworkNamingFlow(ref->GetFormID(), baseName);
+            ShowNetworkNamingFlow(ref->GetFormID(), suggestion);
 
             return RE::BSFixedString(baseName.c_str());
         }
 
+        // Legacy path — called from old Tag power (SPEL 0x803).
+        // Active path is DoRenameContainer() / DoAddToLink() via context menu.
         void BeginTagContainer(RE::StaticFunctionTag*) {
             auto* ref = GetCapturedTarget();
             if (!ref || ref->As<RE::Actor>()) {
@@ -313,6 +325,8 @@ namespace ConsoleCommands {
             });
         }
 
+        // Legacy path — called from old Deregister power (SPEL 0x805).
+        // Active path is DoRemoveContainer() via context menu.
         void BeginDeregister(RE::StaticFunctionTag*) {
             auto* ref = GetCapturedTarget();
             if (!ref || ref->As<RE::Actor>()) {
@@ -347,6 +361,8 @@ namespace ConsoleCommands {
             Feedback::OnError();
         }
 
+        // Legacy path — called from old Detect power (SPEL 0x809).
+        // Active path is DoDetect() via context menu or kAirEmpty auto-fire.
         void BeginDetect(RE::StaticFunctionTag*) {
             auto* mgr = NetworkManager::GetSingleton();
             auto* dataHandler = RE::TESDataHandler::GetSingleton();
@@ -469,6 +485,8 @@ namespace ConsoleCommands {
                          masters.size(), containers.size(), sellFormID != 0 ? 1 : 0, applied);
         }
 
+        // Legacy path — called from old SetSell power (SPEL 0x816).
+        // Active path is DoSetAsSell() via context menu.
         void BeginSellContainer(RE::StaticFunctionTag*) {
             auto* ref = GetCapturedTarget();
             if (!ref || ref->As<RE::Actor>()) {
@@ -516,13 +534,15 @@ namespace ConsoleCommands {
                 mgr->TagContainer(formID, T("$SLID_SellContainer"));
             }
 
+            DisplayName::Apply(formID);
+
             RE::DebugNotification(T("$SLID_NotifySellDesignated").c_str());
             Feedback::OnSetSellContainer(ref);
 
-            // Show welcome tutorial (first time only)
-            WelcomeMenu::TryShowWelcome();
         }
 
+        // Legacy path — called from old Summon power (SPEL 0x818).
+        // Active path is DoSummonChest() via context menu (kAir context).
         void BeginSummonChest(RE::StaticFunctionTag*) {
             auto* mgr = NetworkManager::GetSingleton();
             auto names = mgr->GetNetworkNames();
@@ -824,6 +844,16 @@ namespace ConsoleCommands {
             Settings::bSummonEnabled = a_enabled;
             Settings::Save();
             logger::info("SetSummonEnabled: {}", a_enabled);
+        }
+
+        bool GetInterceptActivation(RE::StaticFunctionTag*) {
+            return Settings::bInterceptActivation;
+        }
+
+        void SetInterceptActivation(RE::StaticFunctionTag*, bool a_enabled) {
+            Settings::bInterceptActivation = a_enabled;
+            Settings::Save();
+            logger::info("SetInterceptActivation: {}", a_enabled);
         }
 
         bool GetShownWelcomeTutorial(RE::StaticFunctionTag*) {
@@ -1749,6 +1779,18 @@ namespace ConsoleCommands {
     // Context Action Dispatch (unified power)
     // =========================================================================
 
+    /// Open a specific container remotely via bypass activation.
+    void DoOpenContainerRemote(RE::FormID a_formID) {
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player) return;
+
+        auto* container = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
+        if (!container) return;
+
+        ActivationHook::SetBypass(a_formID);
+        container->ActivateRef(player, 0, nullptr, 0, false);
+    }
+
     /// Open a master container remotely via bypass activation.
     void DoOpenMasterRemote(const std::string& a_networkName) {
         auto* mgr = NetworkManager::GetSingleton();
@@ -1882,6 +1924,13 @@ namespace ConsoleCommands {
         if (mgr->IsTagged(a_formID)) {
             auto tagName = mgr->GetTagName(a_formID);
             mgr->UntagContainer(a_formID);
+            // Update display name — re-apply if still has a role, otherwise clear
+            if (!mgr->FindNetworkByMaster(a_formID).empty() ||
+                mgr->GetSellContainerFormID() == a_formID) {
+                DisplayName::Apply(a_formID);
+            } else {
+                DisplayName::Clear(a_formID);
+            }
             std::string msg = TF("$SLID_NotifyDeregistered", tagName);
             RE::DebugNotification(msg.c_str());
             if (ref) Feedback::OnUntagContainer(ref);
@@ -1921,7 +1970,15 @@ namespace ConsoleCommands {
             baseName = "Storage";
         }
 
-        ShowNetworkNamingFlow(a_formID, baseName);
+        // Dedup suggestion if name already taken
+        auto existingNames = mgr->GetNetworkNames();
+        std::string suggestion = baseName;
+        int suffix = 2;
+        while (std::find(existingNames.begin(), existingNames.end(), suggestion) != existingNames.end()) {
+            suggestion = baseName + " " + std::to_string(suffix++);
+        }
+
+        ShowNetworkNamingFlow(a_formID, suggestion);
     }
 
     /// Add container to an existing Link (tag + rename).
@@ -1948,6 +2005,7 @@ namespace ConsoleCommands {
             [a_formID, networkName = a_networkName](const std::string& chosenName) {
                 auto* mgr2 = NetworkManager::GetSingleton();
                 mgr2->TagContainer(a_formID, chosenName);
+                DisplayName::Apply(a_formID);
                 auto* ref2 = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
                 if (ref2) Feedback::OnTagContainer(ref2);
                 std::string msg = TF("$SLID_NotifyAddedToLink", chosenName, networkName);
@@ -1982,9 +2040,10 @@ namespace ConsoleCommands {
             mgr->TagContainer(a_formID, T("$SLID_SellContainer"));
         }
 
+        DisplayName::Apply(a_formID);
+
         RE::DebugNotification(T("$SLID_NotifySellDesignated").c_str());
         Feedback::OnSetSellContainer(ref);
-        WelcomeMenu::TryShowWelcome();
     }
 
     /// Destroy a Link — resolve master from network and begin dismantle flow.
@@ -2155,6 +2214,11 @@ namespace ConsoleCommands {
         auto targetFormID = g_capturedTarget.exchange(0);
         auto resolved = ContextResolver::Resolve(targetFormID);
 
+        // Welcome tutorial (first context power use only — blocks context menu)
+        if (WelcomeMenu::TryShowWelcome()) {
+            return;
+        }
+
         // Air-empty: fire Detect directly (no menu)
         if (resolved.context == ContextResolver::Context::kAirEmpty) {
             SKSE::GetTaskInterface()->AddTask([]() {
@@ -2174,17 +2238,22 @@ namespace ConsoleCommands {
             SellOverview::Menu::IsOpen() ||
             TagInputMenu::Menu::IsOpen() ||
             WhooshConfig::Menu::IsOpen() ||
-            RestockConfig::Menu::IsOpen()) {
+            RestockConfig::Menu::IsOpen() ||
+            WelcomeMenu::Menu::IsOpen()) {
             return;
         }
 
         SKSE::GetTaskInterface()->AddTask([resolved]() {
             ContextMenu::Menu::Show(resolved,
                 [targetFID = resolved.targetFormID]
-                (ContextResolver::Action action, const std::string& networkName) {
+                (ContextResolver::Action action, const std::string& networkName, RE::FormID containerFormID) {
                     SKSE::GetTaskInterface()->AddTask(
-                        [action, networkName, targetFID]() {
-                            DispatchContextAction(action, networkName, targetFID);
+                        [action, networkName, targetFID, containerFormID]() {
+                            if (action == ContextResolver::Action::kOpen && containerFormID != 0) {
+                                DoOpenContainerRemote(containerFormID);
+                            } else {
+                                DispatchContextAction(action, networkName, targetFID);
+                            }
                         });
                 });
         });
@@ -2217,6 +2286,8 @@ namespace ConsoleCommands {
         a_vm->RegisterFunction("SetDebugLogging"sv, className, SetDebugLogging);
         a_vm->RegisterFunction("GetSummonEnabled"sv, className, GetSummonEnabled);
         a_vm->RegisterFunction("SetSummonEnabled"sv, className, SetSummonEnabled);
+        a_vm->RegisterFunction("GetInterceptActivation"sv, className, GetInterceptActivation);
+        a_vm->RegisterFunction("SetInterceptActivation"sv, className, SetInterceptActivation);
         a_vm->RegisterFunction("GetShownWelcomeTutorial"sv, className, GetShownWelcomeTutorial);
         a_vm->RegisterFunction("SetShownWelcomeTutorial"sv, className, SetShownWelcomeTutorial);
 

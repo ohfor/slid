@@ -663,15 +663,16 @@ namespace WelcomeMenu {
     // Trigger
     // =========================================================================
 
-    void TryShowWelcome() {
+    bool TryShowWelcome() {
         if (Settings::bShownWelcomeTutorial) {
-            return;
+            return false;
         }
 
         // Small delay to let other UI settle
         SKSE::GetTaskInterface()->AddTask([]() {
             Menu::Show();
         });
+        return true;
     }
 
 }  // namespace WelcomeMenu

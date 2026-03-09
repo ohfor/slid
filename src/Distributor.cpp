@@ -505,35 +505,14 @@ namespace Distributor {
             }
         }
 
-        // Partial-family handling: when a family root is tri-state (some children
-        // checked, some not), the root itself isn't in whooshFilters.  We add it
-        // back so it still catches miscellaneous items in the family, then veto
-        // items that match an explicitly unchecked child.
+        // Family root filters are UI-only checkbox helpers — they toggle their
+        // children but should not participate in matching.  Only individually
+        // checked child filters determine what gets whooshed.  This prevents
+        // root filters (which have broad RequireAnyTrait unions and often lack
+        // FormType gates) from catching unrelated items via COBJ-based traits.
         std::unordered_set<std::string> effectiveFilters = net->whooshFilters;
-        std::vector<const IFilter*> vetoFilters;
-        {
-            for (const auto& rootID : registry->GetFamilyRoots()) {
-                const auto& children = registry->GetChildren(rootID);
-                if (children.empty()) continue;
-                bool anyChecked = false, anyUnchecked = false;
-                for (const auto& childID : children) {
-                    if (net->whooshFilters.count(childID)) anyChecked = true;
-                    else anyUnchecked = true;
-                }
-                if (!anyChecked || !anyUnchecked) continue;
-                // Partial family — re-add root so it catches non-specific items
-                if (net->whooshFilters.count(rootID) == 0) {
-                    effectiveFilters.insert(rootID);
-                }
-                // Collect unchecked children as veto filters
-                for (const auto& childID : children) {
-                    if (net->whooshFilters.count(childID) == 0) {
-                        if (auto* f = registry->GetFilter(childID)) {
-                            vetoFilters.push_back(f);
-                        }
-                    }
-                }
-            }
+        for (const auto& rootID : registry->GetFamilyRoots()) {
+            effectiveFilters.erase(rootID);
         }
 
         struct MoveEntry {
@@ -565,19 +544,6 @@ namespace Distributor {
                     logger::debug("  Whoosh check: {} matched filter '{}'",
                                  item->GetName(), filterID);
                     break;
-                }
-            }
-
-            // Veto: if item matches an unchecked sibling filter, the user
-            // explicitly excluded this category — override the match
-            if (shouldDrain) {
-                for (auto* veto : vetoFilters) {
-                    if (veto->Matches(item)) {
-                        shouldDrain = false;
-                        logger::debug("  Whoosh veto: {} matched unchecked filter '{}'",
-                                     item->GetName(), veto->GetID());
-                        break;
-                    }
                 }
             }
 
