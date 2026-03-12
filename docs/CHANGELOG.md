@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-03-12
+
+### Added
+
+- Exported preset INI files now include the sell container (if one was set). On import, the sell container is restored unless one is already configured — a notification toast informs the user if skipped
+- Exported preset INI files now include usage instructions in the header comments (placement, MCM activation steps)
+
+### Fixed
+
+- CTD or silent failure when reopening config menu after browsing a container (hold-A on chest icon). The engine needs ~700ms of game ticks to complete container close animation cleanup; the previous 250ms fixed delay was insufficient when ConfigMenu (kPausesGame) froze those ticks. Now polls `ExtraOpenCloseActivateRef` until the engine signals cleanup is done, then polls NiControllerSequence animation state on the game thread until the container's Close animation reaches `kInactive`
+- Context power not granted on new game start — `GrantPowers()` ran during SKSE's `kNewGame` message which fires before the game world is loaded. Player character not fully initialized, `AddSpell` silently failed. Now deferred to first `TESCellFullyLoadedEvent` when the player is in-world
+- INI presets not visible in MCM on new game until full game restart — `LoadConfigFromINI()` ran too early during `kNewGame`. Same deferred initialization fix
+- Config menu catch-all row showed false prediction delta after Sort/Sweep (e.g. "4614 > 4382"). The catch-all base count was set from live container data while the predicted count came from the pipeline simulation — same discrepancy previously fixed for filter rows. Base count now syncs to the pipeline prediction, and Sort/Sweep flash animations no longer overwrite it
+
 ## [1.4.1] - 2026-03-09
 
 ### Fixed

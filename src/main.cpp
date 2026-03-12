@@ -46,6 +46,12 @@ extern "C" __declspec(dllexport) constinit auto SKSEPlugin_Version = []() {
 }();
 
 namespace {
+    // Deferred new-game initialization.
+    // kNewGame fires before the game world is loaded — the player character
+    // isn't fully available yet and AddSpell/DisplayName operations may fail.
+    // We set a flag on kNewGame and wait for the first TESCellFullyLoadedEvent,
+    // which fires once the starting cell is loaded and the player is in-world.
+    static std::atomic<bool> g_pendingNewGameInit{false};
     /// Get the SKSE log directory by deriving the game folder name from the DLL's own path.
     /// SKSE::log::log_directory() uses a relocation that resolves to "Skyrim.INI" instead of
     /// the game folder name, so we derive it from the DLL location instead.
@@ -187,6 +193,43 @@ namespace {
         }
     }
 
+    // Run all new-game initialization that requires the player to be in-world
+    void NewGameInit() {
+        logger::info("NewGameInit: player is in-world, running deferred initialization");
+        NetworkManager::GetSingleton()->LoadConfigFromINI();
+        DisplayName::ApplyAll();
+        ResetVendorGlobals();
+        GrantPowers();
+        if (auto* quest = RE::TESForm::LookupByEditorID<RE::TESQuest>("SLID_VendorQuest")) {
+            if (!quest->IsRunning()) {
+                quest->Start();
+                logger::info("VendorQuest: started for new game (running={})", quest->IsRunning());
+            }
+        }
+    }
+
+    // One-shot event sink: waits for first cell load after kNewGame, then runs init
+    class CellLoadedHandler : public RE::BSTEventSink<RE::TESCellFullyLoadedEvent> {
+    public:
+        static CellLoadedHandler* GetSingleton() {
+            static CellLoadedHandler singleton;
+            return &singleton;
+        }
+
+        RE::BSEventNotifyControl ProcessEvent(
+            const RE::TESCellFullyLoadedEvent*,
+            RE::BSTEventSource<RE::TESCellFullyLoadedEvent>*) override
+        {
+            if (g_pendingNewGameInit.exchange(false)) {
+                NewGameInit();
+            }
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+    private:
+        CellLoadedHandler() = default;
+    };
+
     void MessageHandler(SKSE::MessagingInterface::Message* a_msg) {
         switch (a_msg->type) {
             case SKSE::MessagingInterface::kDataLoaded:
@@ -233,6 +276,9 @@ namespace {
                 ContextMenu::InputHandler::Register();
                 SCIEIntegration::RegisterListener();
                 APIMessaging::Initialize();
+                // Register cell-loaded sink for deferred new-game init
+                RE::ScriptEventSourceHolder::GetSingleton()
+                    ->AddEventSink<RE::TESCellFullyLoadedEvent>(CellLoadedHandler::GetSingleton());
                 break;
 
             case SKSE::MessagingInterface::kPostLoadGame: {
@@ -272,19 +318,13 @@ namespace {
             }
 
             case SKSE::MessagingInterface::kNewGame:
-                logger::info("New game started");
+                logger::info("New game started — deferring init to first cell load");
                 SummonChest::Clear();
-                // Load network/tag/sell config from INI (mod author presets)
-                NetworkManager::GetSingleton()->LoadConfigFromINI();
-                DisplayName::ApplyAll();
-                ResetVendorGlobals();
-                GrantPowers();
-                if (auto* quest = RE::TESForm::LookupByEditorID<RE::TESQuest>("SLID_VendorQuest")) {
-                    if (!quest->IsRunning()) {
-                        quest->Start();
-                        logger::info("VendorQuest: started for new game (running={})", quest->IsRunning());
-                    }
-                }
+                // Defer all player-dependent init (power grant, display names, presets)
+                // until the first TESCellFullyLoadedEvent, when the player is in-world.
+                // kNewGame fires before the world is loaded — AddSpell and similar
+                // operations are unreliable at this point.
+                g_pendingNewGameInit = true;
                 break;
         }
     }

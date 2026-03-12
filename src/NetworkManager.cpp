@@ -981,6 +981,8 @@ void NetworkManager::LoadConfigFromINI() {
                         std::transform(vl.begin(), vl.end(), vl.begin(),
                             [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                         preset->userGenerated = (vl == "true");
+                    } else if (key == "SellContainer") {
+                        preset->sellContainerRef = value;
                     } else if (key == "Notice") {
                         preset->warnings.push_back(PresetWarning{"", value});
                     } else if (key == "WarnIfPlugin") {
@@ -1166,10 +1168,20 @@ void NetworkManager::LoadConfigFromINI() {
             continue;
         }
 
-        logger::info("Preset '{}': master={:08X}, {} filters, {} tags, {} whoosh, {} warnings",
+        // Resolve sell container (optional — non-fatal if missing)
+        if (!preset.sellContainerRef.empty()) {
+            preset.resolvedSellFormID = ParseFormIDRef(preset.sellContainerRef, dh);
+            if (preset.resolvedSellFormID == 0) {
+                logger::warn("Preset '{}': failed to resolve SellContainer '{}', ignoring",
+                             preset.name, preset.sellContainerRef);
+            }
+        }
+
+        logger::info("Preset '{}': master={:08X}, {} filters, {} tags, {} whoosh, {} warnings{}",
                      preset.name, preset.resolvedMasterFormID,
                      preset.filters.size(), preset.tags.size(),
-                     preset.whooshFilters.size(), preset.warnings.size());
+                     preset.whooshFilters.size(), preset.warnings.size(),
+                     preset.resolvedSellFormID ? fmt::format(", sell={:08X}", preset.resolvedSellFormID) : "");
         ++presetsLoaded;
         ++it;
     }
@@ -1445,6 +1457,19 @@ bool NetworkManager::ActivatePreset(const std::string& a_name) {
         auto fid = ParseFormIDRef(tag.containerRef, dh);
         if (fid != 0) {
             DisplayName::Apply(fid);
+        }
+    }
+
+    // Set sell container if preset includes one and none is currently set
+    if (preset->resolvedSellFormID != 0) {
+        if (!HasSellContainer()) {
+            SetSellContainer(preset->resolvedSellFormID);
+            DisplayName::Apply(preset->resolvedSellFormID);
+            logger::info("ActivatePreset '{}': set sell container {:08X}", a_name, preset->resolvedSellFormID);
+        } else {
+            logger::info("ActivatePreset '{}': sell container already set ({:08X}), skipping preset sell ({:08X})",
+                         a_name, GetSellContainerFormID(), preset->resolvedSellFormID);
+            RE::DebugNotification("SLID: Sell container already set, preset sell skipped.");
         }
     }
 

@@ -11,6 +11,9 @@
 #include "ScaleformUtil.h"
 #include "TranslationService.h"
 
+#include <RE/N/NiControllerManager.h>
+#include <RE/N/NiControllerSequence.h>
+
 namespace FilterPanel {
 
     // --- Static module state ---
@@ -93,6 +96,7 @@ namespace FilterPanel {
     static std::set<std::string> s_savedExpandedIDs;  // filterIDs of expanded families (for container browse)
 
     static bool s_pendingReopen = false;
+    static RE::FormID s_browsedContainerFormID = 0;  // container opened for browse (for reopen polling)
     static bool s_deferredRecalc = false;
     static int s_savedScrollOffset = 0;
     static int s_savedSelectedIndex = -1;
@@ -2192,6 +2196,7 @@ namespace FilterPanel {
 
         SaveState();
         s_pendingReopen = true;
+        s_browsedContainerFormID = containerFormID;
         s_callbacks.hideMenu();
 
         auto formID = containerFormID;
@@ -2212,12 +2217,90 @@ namespace FilterPanel {
         });
     }
 
+    void SetBrowsedContainer(RE::FormID a_formID) {
+        s_browsedContainerFormID = a_formID;
+    }
+
+    // Check if any animation sequence on a container ref is still active.
+    // Must be called from the game thread (accesses 3D scene graph).
+    static bool IsAnimationActive(RE::TESObjectREFR* a_ref) {
+        if (!a_ref) return false;
+        auto* node = a_ref->Get3D();
+        if (!node) return false;
+        for (auto* ctrl = node->GetControllers(); ctrl; ctrl = ctrl->GetNext()) {
+            auto* mgr = ctrl->AsNiControllerManager();
+            if (!mgr) continue;
+            auto* closeSeq = mgr->GetSequenceByName("Close");
+            if (closeSeq && !closeSeq->Inactive()) {
+                return true;
+            }
+            auto* openSeq = mgr->GetSequenceByName("Open");
+            if (openSeq && !openSeq->Inactive()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Game-thread poll for animation completion.  Posts itself as a task
+    // until the close animation finishes or we hit the timeout.
+    static void PollAnimationAndReopen(RE::FormID a_formID, const std::string& a_networkName,
+                                       int a_elapsed, int a_startMs) {
+        constexpr int ANIM_POLL_MS = 50;
+        constexpr int ANIM_TIMEOUT_MS = 3000;
+
+        auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_formID);
+        bool animDone = !ref || !IsAnimationActive(ref);
+        int totalMs = a_startMs + a_elapsed;
+
+        if (animDone || a_elapsed >= ANIM_TIMEOUT_MS) {
+            logger::info("OnContainerClosed: container {:08X} fully ready after {}ms (anim {})",
+                         a_formID, totalMs, animDone ? "done" : "timeout");
+            auto network = a_networkName;
+            s_callbacks.showMenu(network);
+            return;
+        }
+
+        // Schedule next check after a short delay
+        auto network = a_networkName;
+        auto formID = a_formID;
+        int nextElapsed = a_elapsed + ANIM_POLL_MS;
+        int startMs = a_startMs;
+        std::thread([formID, network, nextElapsed, startMs]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            SKSE::GetTaskInterface()->AddTask([formID, network, nextElapsed, startMs]() {
+                PollAnimationAndReopen(formID, network, nextElapsed, startMs);
+            });
+        }).detach();
+    }
+
     void OnContainerClosed() {
         if (!s_pendingReopen) return;
         auto networkName = ConfigState::GetNetworkName();
-        SKSE::GetTaskInterface()->AddTask([networkName]() {
-            s_callbacks.showMenu(networkName);
-        });
+        auto formID = s_browsedContainerFormID;
+        // Phase 1: Background thread polls ExtraOpenCloseActivateRef (activation cleanup).
+        // Phase 2: Game thread polls NiControllerSequence animation state.
+        // Both must complete before we reopen the config menu.
+        std::thread([networkName, formID]() {
+            constexpr int POLL_INTERVAL_MS = 50;
+            constexpr int MAX_POLLS = 100;  // 5 second timeout
+            int extraPollMs = 0;
+            for (int i = 0; i < MAX_POLLS; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(POLL_INTERVAL_MS));
+                extraPollMs = (i + 1) * POLL_INTERVAL_MS;
+                auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(formID);
+                if (!ref || !ref->extraList.GetByType<RE::ExtraOpenCloseActivateRef>()) {
+                    logger::info("OnContainerClosed: container {:08X} ExtraOpenCloseActivateRef cleared after {}ms",
+                                 formID, extraPollMs);
+                    break;
+                }
+            }
+            // Switch to game thread for animation state polling (3D access)
+            auto startMs = extraPollMs;
+            SKSE::GetTaskInterface()->AddTask([formID, networkName, startMs]() {
+                PollAnimationAndReopen(formID, networkName, 0, startMs);
+            });
+        }).detach();
     }
 
     // --- Internal: Dropdown context and result handlers ---

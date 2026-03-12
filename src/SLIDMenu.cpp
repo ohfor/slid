@@ -138,7 +138,7 @@ namespace SLIDMenu {
             [this]() { RecalcPredictions(); },
             []() { ConfigMenu::Hide(); },
             []() { InputHandler::ResetRepeat(); },
-            [this]() { FilterPanel::SaveOrchestratorFocus(static_cast<int>(m_focus), m_actionIndex); FilterPanel::SaveState(); }
+            [this]() { FilterPanel::SaveOrchestratorFocus(static_cast<int>(m_focus), m_actionIndex); FilterPanel::SaveState(); FilterPanel::SetBrowsedContainer(CatchAllPanel::GetContainerFormID()); }
         };
         CatchAllPanel::Init(uiMovie.get(), ConfigState::GetMasterFormID(), catchAllCb);
 
@@ -362,12 +362,11 @@ namespace SLIDMenu {
                                     prediction.contestedByMaps, prediction.originCount);
         bool catchAllIsMaster = (catchAllFormID == 0 || catchAllFormID == masterFormID);
 
-        // Refresh catch-all base count from live container data (may have changed
-        // due to item transfers like GatherFamilyToMaster)
-        RE::FormID countFormID = catchAllIsMaster ? masterFormID : catchAllFormID;
-        if (countFormID != 0) {
-            int liveCount = ContainerRegistry::GetSingleton()->CountItems(countFormID);
-            CatchAllPanel::SetCount(liveCount, false);
+        // Sync catch-all base count to pipeline prediction (same approach as
+        // FilterPanel::SetPredictions — avoids false deltas when live container
+        // count diverges from the pipeline's simulated count).
+        if (!catchAllIsMaster && catchAllFormID != 0) {
+            CatchAllPanel::SetCount(prediction.catchAllCount, false);
         }
 
         CatchAllPanel::SetPrediction(
@@ -431,8 +430,7 @@ namespace SLIDMenu {
         flashIndices.erase(filterCount);
         FilterPanel::RefreshAfterSort(flashIndices);
         if (catchAllFlash) {
-            // newCatchAllCount was already computed above — flash the updated count
-            CatchAllPanel::SetCount(newCatchAllCount, true);
+            CatchAllPanel::FlashCount();
         }
         OriginPanel::SetCount(uiMovie.get(), newOriginCount, flashIndices.count(-1) > 0);
 
@@ -480,7 +478,7 @@ namespace SLIDMenu {
         flashIndices.erase(filterCount);
         FilterPanel::RefreshAfterSort(flashIndices);
         if (catchAllFlash) {
-            CatchAllPanel::SetCount(newCatchAllCount, true);
+            CatchAllPanel::FlashCount();
         }
         OriginPanel::SetCount(uiMovie.get(), newOriginCount, flashIndices.count(-1) > 0);
 

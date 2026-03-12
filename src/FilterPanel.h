@@ -89,6 +89,7 @@ namespace FilterPanel {
     void ToggleExpand();     // expand/collapse family (on root rows with children)
     void SelectChest();
     void OpenLinkedContainer();
+    void SetBrowsedContainer(RE::FormID a_formID);
     void OnContainerClosed();
 
     // --- Sub-focus ---

@@ -1557,7 +1557,19 @@ namespace ConsoleCommands {
             out << ";\n";
             out << "; " << uniqueContainers.size() << " containers linked, " << assignedCount << " filter assignments.\n";
             out << ";\n";
-            out << "; Any file matching *SLID_*.ini will be loaded by SLID.\n";
+            out << "; HOW TO USE THIS PRESET:\n";
+            out << ";   1. Place this file in Data/SKSE/Plugins/SLID/\n";
+            out << ";      (any filename matching *SLID_*.ini will be loaded)\n";
+            out << ";   2. Start or load a game\n";
+            out << ";   3. Open MCM > SLID > Presets and click Activate\n";
+            out << ";\n";
+            out << "; The preset creates a Link using the same containers and filter\n";
+            out << "; assignments you had when you exported it. Containers are referenced\n";
+            out << "; by FormID, so they must exist in the same load order.\n";
+            out << ";\n";
+            out << "; If you had a sell container set when exporting, it is included.\n";
+            out << "; On activation, it will be restored unless one is already set.\n";
+            out << ";\n";
             out << "\n";
 
             // --- [Preset:Name] ---
@@ -1582,6 +1594,21 @@ namespace ConsoleCommands {
                 out << "Description = Generated from '" << networkName << "' on " << dateBuf << "\n";
             }
             out << "UserGenerated = true\n";
+            // Include sell container if one is set
+            if (mgr->HasSellContainer()) {
+                auto sellFID = mgr->GetSellContainerFormID();
+                auto sellComment = GetContainerDisplayName(mgr, sellFID);
+                out << "SellContainer = " << FormatFormIDForExport(sellFID);
+                if (!sellComment.empty()) {
+                    out << "  ; " << sellComment;
+                }
+                out << "\n";
+                // Ensure sell container's plugin is in RequirePlugin
+                auto sellPlugin = GetPluginNameForFormID(sellFID);
+                if (!sellPlugin.empty() && !kBaseGamePlugins.count(sellPlugin) && !requiredPlugins.count(sellPlugin)) {
+                    out << "RequirePlugin = " << sellPlugin << "\n";
+                }
+            }
             out << "\n";
 
             // --- [Preset:Name:Filters] ---

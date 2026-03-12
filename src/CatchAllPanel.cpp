@@ -310,6 +310,16 @@ namespace CatchAllPanel {
         }
     }
 
+    void FlashCount() {
+        s_flashActive = true;
+        s_flashStart = std::chrono::steady_clock::now();
+        PopulateRow();
+        if (s_movie) {
+            ScaleformUtil::SetTextFieldFormat(s_movie, "_root.catchAllRow.countText",
+                14, COLOR_COUNT_FLASH);
+        }
+    }
+
     void RefreshCount() {
         PopulateRow();
     }

@@ -41,6 +41,7 @@ namespace CatchAllPanel {
     void SetPrediction(int a_count, bool a_isMaster);
     void ClearPrediction();
     void SetCount(int a_count, bool a_flash);
+    void FlashCount();   // trigger flash animation without changing base count
     void RefreshCount();
 
     // --- Data ---

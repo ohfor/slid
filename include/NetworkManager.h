@@ -55,6 +55,7 @@ struct NetworkPreset {
     std::vector<std::string> requirePlugins;        // empty = always available; all must be loaded
     std::string masterRef;                         // raw INI ref
     std::string catchAllRef;                       // empty = use master
+    std::string sellContainerRef;                  // optional sell container ref
     std::vector<PresetFilterStage> filters;        // ordered
     std::vector<PresetTag> tags;
     std::unordered_set<std::string> whooshFilters;
@@ -64,6 +65,7 @@ struct NetworkPreset {
 
     // Resolved at load time
     RE::FormID resolvedMasterFormID = 0;
+    RE::FormID resolvedSellFormID = 0;
 };
 
 struct ContainerListEntry {
