@@ -8,6 +8,17 @@
 
 namespace Settings {
 
+    // --- Dirty tracking ---
+    static std::unordered_set<std::string> s_dirtyKeys;
+
+    void MarkDirty(const char* a_key) {
+        s_dirtyKeys.insert(a_key);
+    }
+
+    bool IsDirty(const char* a_key) {
+        return s_dirtyKeys.count(a_key) > 0;
+    }
+
     // --- Parsing helpers ---
 
     static std::string Trim(const std::string& a_str) {
@@ -85,6 +96,12 @@ namespace Settings {
         return dir / "SLID.ini";
     }
 
+    std::filesystem::path GetCustomINIPath() {
+        auto ini = GetINIPath();
+        if (ini.empty()) return {};
+        return ini.parent_path() / "SLIDCustom.ini";
+    }
+
     std::filesystem::path GetDataDir() {
         auto ini = GetINIPath();
         if (ini.empty()) return {};
@@ -93,20 +110,14 @@ namespace Settings {
 
     // --- Load ---
 
-    void Load() {
-        auto path = GetINIPath();
-        if (path.empty()) {
-            logger::warn("Settings: could not determine INI path");
-            return;
-        }
-
-        std::ifstream file(path);
+    static void LoadFromFile(const std::filesystem::path& a_path, bool a_markDirty = false) {
+        std::ifstream file(a_path);
         if (!file.is_open()) {
-            logger::info("Settings: {} not found, using defaults", path.string());
+            logger::info("Settings: {} not found, skipping", a_path.string());
             return;
         }
 
-        logger::info("Settings: loading {}", path.string());
+        logger::info("Settings: loading {}", a_path.string());
 
         std::string currentSection;
         std::string line;
@@ -133,26 +144,29 @@ namespace Settings {
             // Key = Value
             auto eqPos = line.find('=');
             if (eqPos == std::string::npos) {
-                logger::warn("Settings: line {}: malformed (no '='): {}", lineNum, line);
+                logger::warn("Settings: {}:{}: malformed (no '='): {}", a_path.filename().string(), lineNum, line);
                 continue;
             }
 
             auto key = Trim(line.substr(0, eqPos));
             auto val = Trim(line.substr(eqPos + 1));
 
+            // Track whether this key matched a known setting
+            bool matched = false;
+
             if (currentSection == "General") {
                 if (key == "bModEnabled") {
-                    bModEnabled = ParseBool(val, bModEnabled);
+                    bModEnabled = ParseBool(val, bModEnabled); matched = true;
                 } else if (key == "bDebugLogging") {
-                    bDebugLogging = ParseBool(val, bDebugLogging);
+                    bDebugLogging = ParseBool(val, bDebugLogging); matched = true;
                 } else if (key == "bShownWelcomeTutorial") {
-                    bShownWelcomeTutorial = ParseBool(val, bShownWelcomeTutorial);
+                    bShownWelcomeTutorial = ParseBool(val, bShownWelcomeTutorial); matched = true;
                 } else if (key == "bInterceptActivation") {
-                    bInterceptActivation = ParseBool(val, bInterceptActivation);
+                    bInterceptActivation = ParseBool(val, bInterceptActivation); matched = true;
                 }
             } else if (currentSection == "Powers") {
                 if (key == "bSummonEnabled") {
-                    bSummonEnabled = ParseBool(val, bSummonEnabled);
+                    bSummonEnabled = ParseBool(val, bSummonEnabled); matched = true;
                 }
             } else if (currentSection == "Containers") {
                 if (key == "sGenericContainerNames") {
@@ -175,21 +189,39 @@ namespace Settings {
                 else if (key == "uVendorItemGem")        uVendorItemGem        = ParseHex(val, uVendorItemGem);
                 else if (key == "uVendorItemKey")        uVendorItemKey        = ParseHex(val, uVendorItemKey);
             } else if (currentSection == "Sales") {
-                if (key == "fSellPricePercent")       fSellPricePercent  = ParseFloat(val, fSellPricePercent);
-                else if (key == "iSellBatchSize")     iSellBatchSize     = ParseInt(val, iSellBatchSize);
-                else if (key == "fSellIntervalHours") fSellIntervalHours = ParseFloat(val, fSellIntervalHours);
+                if (key == "fSellPricePercent")       { fSellPricePercent  = ParseFloat(val, fSellPricePercent); matched = true; }
+                else if (key == "iSellBatchSize")     { iSellBatchSize     = ParseInt(val, iSellBatchSize); matched = true; }
+                else if (key == "fSellIntervalHours") { fSellIntervalHours = ParseFloat(val, fSellIntervalHours); matched = true; }
             } else if (currentSection == "VendorSales") {
-                if (key == "fVendorPricePercent")       fVendorPricePercent  = ParseFloat(val, fVendorPricePercent);
-                else if (key == "iVendorBatchSize")     iVendorBatchSize     = ParseInt(val, iVendorBatchSize);
-                else if (key == "fVendorIntervalHours") fVendorIntervalHours = ParseFloat(val, fVendorIntervalHours);
-                else if (key == "iVendorCost")          iVendorCost          = ParseInt(val, iVendorCost);
+                if (key == "fVendorPricePercent")       { fVendorPricePercent  = ParseFloat(val, fVendorPricePercent); matched = true; }
+                else if (key == "iVendorBatchSize")     { iVendorBatchSize     = ParseInt(val, iVendorBatchSize); matched = true; }
+                else if (key == "fVendorIntervalHours") { fVendorIntervalHours = ParseFloat(val, fVendorIntervalHours); matched = true; }
+                else if (key == "iVendorCost")          { iVendorCost          = ParseInt(val, iVendorCost); matched = true; }
             } else if (currentSection == "ContainerPicker") {
-                if (key == "bIncludeUnlinkedContainers") bIncludeUnlinkedContainers = ParseBool(val, bIncludeUnlinkedContainers);
+                if (key == "bIncludeUnlinkedContainers") { bIncludeUnlinkedContainers = ParseBool(val, bIncludeUnlinkedContainers); matched = true; }
             } else if (currentSection == "Compatibility") {
-                if (key == "bSCIEIntegration")          bSCIEIntegration = ParseBool(val, bSCIEIntegration);
-                else if (key == "bSCIEIncludeContainers") bSCIEIncludeContainers = ParseBool(val, bSCIEIncludeContainers);
+                if (key == "bSCIEIntegration")          { bSCIEIntegration = ParseBool(val, bSCIEIntegration); matched = true; }
+                else if (key == "bSCIEIncludeContainers") { bSCIEIncludeContainers = ParseBool(val, bSCIEIncludeContainers); matched = true; }
+            }
+
+            if (a_markDirty && matched) {
+                MarkDirty(key.c_str());
             }
         }
+    }
+
+    void Load() {
+        auto basePath = GetINIPath();
+        if (basePath.empty()) {
+            logger::warn("Settings: could not determine INI path");
+            return;
+        }
+
+        // Load shipped defaults first
+        LoadFromFile(basePath);
+
+        // Overlay user overrides (survives mod updates) — mark as dirty
+        LoadFromFile(GetCustomINIPath(), true);
 
         logger::info("Settings: loaded (debug={}, genericNames={}, sellPrice={:.0f}%)",
                      bDebugLogging, sGenericContainerNames.size(), fSellPricePercent * 100.0f);
@@ -346,10 +378,27 @@ namespace Settings {
 
     // --- Save ---
 
+    // Helper: write a section header only once, on first dirty key in that section
+    struct SectionWriter {
+        std::ofstream& file;
+        std::string current;
+        void Ensure(const char* a_section) {
+            if (current != a_section) {
+                current = a_section;
+                file << "[" << a_section << "]\n";
+            }
+        }
+    };
+
     void Save() {
-        auto path = GetINIPath();
+        if (s_dirtyKeys.empty()) {
+            logger::info("Settings::Save: nothing dirty, skipping");
+            return;
+        }
+
+        auto path = GetCustomINIPath();
         if (path.empty()) {
-            logger::warn("Settings::Save: could not determine INI path");
+            logger::warn("Settings::Save: could not determine custom INI path");
             return;
         }
 
@@ -359,135 +408,117 @@ namespace Settings {
             return;
         }
 
-        file << "; ============================================================================\n";
-        file << "; SLID (Skyrim Linked Item Distribution) — Configuration\n";
-        file << "; ============================================================================\n";
-        file << ";\n";
-        file << "; Edit values below to customize SLID behavior. Delete this file to reset\n";
-        file << "; all settings to their defaults.\n";
-        file << ";\n";
-        file << "; Lines starting with ; or # are comments.\n";
-        file << "; Hex values use 0x prefix (e.g. 0x000A5CB3).\n";
-        file << "\n";
+        file << "; SLID User Settings — Auto-generated, survives mod updates.\n";
+        file << "; Only contains settings you changed. Delete to reset to defaults.\n\n";
 
-        file << "[General]\n";
-        file << "\n";
-        file << "; Master switch for mod functionality. When disabled, all mod features\n";
-        file << "; are inactive (powers, container intercepts, sales). Data is preserved.\n";
-        file << "; Default: true\n";
-        file << "bModEnabled = " << (bModEnabled ? "true" : "false") << "\n";
-        file << "\n";
-        file << "; Enable verbose debug logging. Produces much more log output.\n";
-        file << "; Default: false\n";
-        file << "bDebugLogging = " << (bDebugLogging ? "true" : "false") << "\n";
-        file << "\n";
-        file << "; Has the user seen the welcome tutorial popup?\n";
-        file << "; Set to false in MCM to show it again on next interaction.\n";
-        file << "bShownWelcomeTutorial = " << (bShownWelcomeTutorial ? "true" : "false") << "\n";
-        file << "\n";
-        file << "; Intercept master/sell container activation with a SLID action menu.\n";
-        file << "; When false, containers open normally. Use context power for SLID actions.\n";
-        file << "; Default: false\n";
-        file << "bInterceptActivation = " << (bInterceptActivation ? "true" : "false") << "\n";
-        file << "\n";
+        SectionWriter sw{file, ""};
 
-        file << "[Powers]\n";
-        file << "\n";
-        file << "; Enable the Summon Chest power.\n";
-        file << "; Default: true\n";
-        file << "bSummonEnabled = " << (bSummonEnabled ? "true" : "false") << "\n";
-        file << "\n";
+        // [General] — bModEnabled and bDebugLogging are global (SLID.ini only), never saved here
+        if (IsDirty("bShownWelcomeTutorial")) { sw.Ensure("General"); file << "bShownWelcomeTutorial = " << (bShownWelcomeTutorial ? "true" : "false") << "\n"; }
+        if (IsDirty("bInterceptActivation"))  { sw.Ensure("General"); file << "bInterceptActivation = " << (bInterceptActivation ? "true" : "false") << "\n"; }
 
-        file << "[Containers]\n";
-        file << "\n";
-        file << "; Comma-separated list of generic container base names to hide from the\n";
-        file << "; scanned container list.\n";
-        file << "sGenericContainerNames = ";
-        for (size_t i = 0; i < sGenericContainerNames.size(); ++i) {
-            if (i > 0) file << ",";
-            file << sGenericContainerNames[i];
-        }
-        file << "\n";
-        file << "\n";
+        // [Powers]
+        if (IsDirty("bSummonEnabled")) { sw.Ensure("Powers"); file << "bSummonEnabled = " << (bSummonEnabled ? "true" : "false") << "\n"; }
 
-        file << "[Categories]\n";
-        file << "\n";
-        file << "; Crafting station keywords used for COBJ-based item categorization.\n";
-        file << std::hex;
-        file << "uCraftingCookpot = 0x" << std::setfill('0') << std::setw(8) << uCraftingCookpot << "\n";
-        file << std::dec;
-        file << "sCookpotPlugin = " << sCookpotPlugin << "\n";
-        file << std::hex;
-        file << "uCraftingSmelter = 0x" << std::setfill('0') << std::setw(8) << uCraftingSmelter << "\n";
-        file << std::dec;
-        file << "sSmelterPlugin = " << sSmelterPlugin << "\n";
-        file << std::hex;
-        file << "uCraftingCarpenter = 0x" << std::setfill('0') << std::setw(6) << uCraftingCarpenter << "\n";
-        file << std::dec;
-        file << "sCarpenterPlugin = " << sCarpenterPlugin << "\n";
-        file << "sKeywordPlugin = " << sKeywordPlugin << "\n";
-        file << std::hex;
-        file << "uVendorItemAnimalHide = 0x" << std::setfill('0') << std::setw(6) << uVendorItemAnimalHide << "\n";
-        file << "uVendorItemAnimalPart = 0x" << std::setfill('0') << std::setw(6) << uVendorItemAnimalPart << "\n";
-        file << "uVendorItemOreIngot = 0x" << std::setfill('0') << std::setw(6) << uVendorItemOreIngot << "\n";
-        file << "uVendorItemGem = 0x" << std::setfill('0') << std::setw(6) << uVendorItemGem << "\n";
-        file << "uVendorItemKey = 0x" << std::setfill('0') << std::setw(6) << uVendorItemKey << "\n";
-        file << std::dec;
-        file << "\n";
+        // [Sales]
+        if (IsDirty("fSellPricePercent"))  { sw.Ensure("Sales"); file << "fSellPricePercent = " << std::fixed << std::setprecision(2) << fSellPricePercent << "\n"; }
+        if (IsDirty("iSellBatchSize"))     { sw.Ensure("Sales"); file << "iSellBatchSize = " << iSellBatchSize << "\n"; }
+        if (IsDirty("fSellIntervalHours")) { sw.Ensure("Sales"); file << "fSellIntervalHours = " << std::fixed << std::setprecision(1) << fSellIntervalHours << "\n"; }
 
-        file << "[Sales]\n";
-        file << "\n";
-        file << "; Fraction of base price the player receives when selling (0.0 - 1.0).\n";
-        file << "; Default: 0.10 (10%)\n";
-        file << "fSellPricePercent = " << std::fixed << std::setprecision(2) << fSellPricePercent << "\n";
-        file << "\n";
-        file << "; Maximum number of items processed per sell batch.\n";
-        file << "; Default: 10\n";
-        file << "iSellBatchSize = " << iSellBatchSize << "\n";
-        file << "\n";
-        file << "; Minimum hours between automatic sell cycles.\n";
-        file << "; Default: 24.0\n";
-        file << "fSellIntervalHours = " << std::fixed << std::setprecision(1) << fSellIntervalHours << "\n";
-        file << "\n";
+        // [VendorSales]
+        if (IsDirty("fVendorPricePercent"))  { sw.Ensure("VendorSales"); file << "fVendorPricePercent = " << std::fixed << std::setprecision(2) << fVendorPricePercent << "\n"; }
+        if (IsDirty("iVendorBatchSize"))     { sw.Ensure("VendorSales"); file << "iVendorBatchSize = " << iVendorBatchSize << "\n"; }
+        if (IsDirty("fVendorIntervalHours")) { sw.Ensure("VendorSales"); file << "fVendorIntervalHours = " << std::fixed << std::setprecision(1) << fVendorIntervalHours << "\n"; }
+        if (IsDirty("iVendorCost"))          { sw.Ensure("VendorSales"); file << "iVendorCost = " << iVendorCost << "\n"; }
 
-        file << "[VendorSales]\n";
-        file << "\n";
-        file << "; Fraction of base price registered vendors pay (0.0 - 1.0).\n";
-        file << "; Default: 0.25 (25%)\n";
-        file << "fVendorPricePercent = " << std::fixed << std::setprecision(2) << fVendorPricePercent << "\n";
-        file << "\n";
-        file << "; Maximum items a single vendor buys per visit.\n";
-        file << "; Default: 25\n";
-        file << "iVendorBatchSize = " << iVendorBatchSize << "\n";
-        file << "\n";
-        file << "; Hours between registered vendor visits.\n";
-        file << "; Default: 48.0\n";
-        file << "fVendorIntervalHours = " << std::fixed << std::setprecision(1) << fVendorIntervalHours << "\n";
-        file << "\n";
-        file << "; Gold cost to establish a trade arrangement with a vendor.\n";
-        file << "; Default: 5000\n";
-        file << "iVendorCost = " << iVendorCost << "\n";
-        file << "\n";
+        // [ContainerPicker]
+        if (IsDirty("bIncludeUnlinkedContainers")) { sw.Ensure("ContainerPicker"); file << "bIncludeUnlinkedContainers = " << (bIncludeUnlinkedContainers ? "true" : "false") << "\n"; }
 
-        file << "[ContainerPicker]\n";
-        file << "\n";
-        file << "; Include untagged containers from cell scan in the container picker.\n";
-        file << "; When false, only tagged containers appear (cleaner picker).\n";
-        file << "; Default: false\n";
-        file << "bIncludeUnlinkedContainers = " << (bIncludeUnlinkedContainers ? "true" : "false") << "\n";
-        file << "\n";
-
-        file << "[Compatibility]\n";
-        file << "\n";
-        file << "; Enable integration with SCIE (Skyrim Crafting Inventory Extender).\n";
-        file << "; Default: true\n";
-        file << "bSCIEIntegration = " << (bSCIEIntegration ? "true" : "false") << "\n";
-        file << "\n";
-        file << "; Include SCIE containers in the Link container picker.\n";
-        file << "; Default: true\n";
-        file << "bSCIEIncludeContainers = " << (bSCIEIncludeContainers ? "true" : "false") << "\n";
+        // [Compatibility]
+        if (IsDirty("bSCIEIntegration"))          { sw.Ensure("Compatibility"); file << "bSCIEIntegration = " << (bSCIEIntegration ? "true" : "false") << "\n"; }
+        if (IsDirty("bSCIEIncludeContainers"))    { sw.Ensure("Compatibility"); file << "bSCIEIncludeContainers = " << (bSCIEIncludeContainers ? "true" : "false") << "\n"; }
 
         file.close();
-        logger::info("Settings::Save: wrote {}", path.string());
+        logger::info("Settings::Save: wrote {} ({} overrides)", path.string(), s_dirtyKeys.size());
+    }
+
+    // --- Setters (assign + mark dirty + save) ---
+
+    void SetShownWelcomeTutorial(bool a_val) {
+        bShownWelcomeTutorial = a_val;
+        MarkDirty("bShownWelcomeTutorial");
+        Save();
+    }
+
+    void SetInterceptActivation(bool a_val) {
+        bInterceptActivation = a_val;
+        MarkDirty("bInterceptActivation");
+        Save();
+    }
+
+    void SetSummonEnabled(bool a_val) {
+        bSummonEnabled = a_val;
+        MarkDirty("bSummonEnabled");
+        Save();
+    }
+
+    void SetIncludeUnlinkedContainers(bool a_val) {
+        bIncludeUnlinkedContainers = a_val;
+        MarkDirty("bIncludeUnlinkedContainers");
+        Save();
+    }
+
+    void SetSCIEIntegration(bool a_val) {
+        bSCIEIntegration = a_val;
+        MarkDirty("bSCIEIntegration");
+        Save();
+    }
+
+    void SetSCIEIncludeContainers(bool a_val) {
+        bSCIEIncludeContainers = a_val;
+        MarkDirty("bSCIEIncludeContainers");
+        Save();
+    }
+
+    void SetSellPricePercent(float a_val) {
+        fSellPricePercent = std::clamp(a_val, 0.0f, 1.0f);
+        MarkDirty("fSellPricePercent");
+        Save();
+    }
+
+    void SetSellBatchSize(int32_t a_val) {
+        iSellBatchSize = std::max(1, a_val);
+        MarkDirty("iSellBatchSize");
+        Save();
+    }
+
+    void SetSellIntervalHours(float a_val) {
+        fSellIntervalHours = std::max(1.0f, a_val);
+        MarkDirty("fSellIntervalHours");
+        Save();
+    }
+
+    void SetVendorPricePercent(float a_val) {
+        fVendorPricePercent = std::clamp(a_val, 0.0f, 1.0f);
+        MarkDirty("fVendorPricePercent");
+        Save();
+    }
+
+    void SetVendorBatchSize(int32_t a_val) {
+        iVendorBatchSize = std::max(1, a_val);
+        MarkDirty("iVendorBatchSize");
+        Save();
+    }
+
+    void SetVendorIntervalHours(float a_val) {
+        fVendorIntervalHours = std::max(1.0f, a_val);
+        MarkDirty("fVendorIntervalHours");
+        Save();
+    }
+
+    void SetVendorCost(int32_t a_val) {
+        iVendorCost = std::max(0, a_val);
+        MarkDirty("iVendorCost");
+        Save();
     }
 }

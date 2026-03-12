@@ -283,6 +283,7 @@ namespace {
 
             case SKSE::MessagingInterface::kPostLoadGame: {
                 logger::info("Game loaded");
+                WelcomeMenu::ResetSession();
                 SummonChest::Clear();
                 auto result = NetworkManager::GetSingleton()->ValidateNetworks();
                 auto vendorsPruned = VendorRegistry::GetSingleton()->Validate();
@@ -319,6 +320,7 @@ namespace {
 
             case SKSE::MessagingInterface::kNewGame:
                 logger::info("New game started — deferring init to first cell load");
+                WelcomeMenu::ResetSession();
                 SummonChest::Clear();
                 // Defer all player-dependent init (power grant, display names, presets)
                 // until the first TESCellFullyLoadedEvent, when the player is in-world.

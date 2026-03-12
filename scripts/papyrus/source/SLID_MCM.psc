@@ -79,15 +79,18 @@ string[] _networkNames
 ; INITIALIZATION
 ; =============================================================================
 
+int function GetVersion()
+    return 10403  ; 1.4.3 -> MAJOR*10000 + MINOR*100 + PATCH
+endFunction
+
 event OnConfigInit()
     ModName = "SLID"
-    CurrentVersion = 200  ; Bump to force OnVersionUpdate on existing saves
     InitializePages()
     InitializeArrays()
 endEvent
 
 event OnVersionUpdate(int a_version)
-    ; Called by SkyUI when CurrentVersion increases - reinitialize for existing saves
+    Debug.Trace("[SLID] MCM version update: " + CurrentVersion + " -> " + a_version)
     InitializePages()
     InitializeArrays()
 endEvent
@@ -119,6 +122,13 @@ endFunction
 ; =============================================================================
 
 event OnPageReset(string a_page)
+    ; Manual version check — existing saves lack the PlayerLoadGame alias,
+    ; so OnGameReload/CheckVersion never fires. This catches them on first MCM open.
+    if (CurrentVersion < GetVersion())
+        OnVersionUpdate(GetVersion())
+        CurrentVersion = GetVersion()
+    endif
+
     ; Always reinitialize pages to ensure updated keys are used (save may have stale values)
     InitializePages()
 

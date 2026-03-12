@@ -1,6 +1,7 @@
 #pragma once
 
 #include <RE/Skyrim.h>
+#include "ButtonBar.h"
 
 namespace WelcomeMenu {
 
@@ -41,6 +42,10 @@ namespace WelcomeMenu {
         RE::GFxValue m_root;
         RE::GFxValue m_panel;
         RE::GFxValue m_checkboxMark;
+        ButtonBar m_buttonBar;
+        float m_panelX = 0.0f;
+        float m_panelY = 0.0f;
+        int m_hoverIndex = -1;
         bool m_dontShowAgain = false;
 
         // Layout constants
@@ -53,8 +58,6 @@ namespace WelcomeMenu {
         static constexpr float LINE_HEIGHT = 20.0f;
         static constexpr float SECTION_GAP = 24.0f;
         static constexpr float CHECKBOX_SIZE = 16.0f;
-        static constexpr float BUTTON_W = 100.0f;
-        static constexpr float BUTTON_H = 32.0f;
 
         // Colors
         static constexpr std::uint32_t COLOR_BG = 0x1A1A1A;
@@ -65,9 +68,7 @@ namespace WelcomeMenu {
         static constexpr std::uint32_t COLOR_CHECKBOX_BG = 0x333333;
         static constexpr std::uint32_t COLOR_CHECKBOX_BORDER = 0x666666;
         static constexpr std::uint32_t COLOR_CHECKBOX_MARK = 0xD4AF37;
-        static constexpr std::uint32_t COLOR_BUTTON_BG = 0x3A3A3A;
-        static constexpr std::uint32_t COLOR_BUTTON_BORDER = 0x8B7355;
-        static constexpr std::uint32_t COLOR_BUTTON_TEXT = 0xFFFFFF;
+        static constexpr double BUTTON_BAR_W = 100.0;
     };
 
     class InputHandler : public RE::BSTEventSink<RE::InputEvent*> {
@@ -78,6 +79,9 @@ namespace WelcomeMenu {
         RE::BSEventNotifyControl ProcessEvent(RE::InputEvent* const* a_event,
                                                RE::BSTEventSource<RE::InputEvent*>* a_source) override;
     };
+
+    // Reset session state (call on game load / new game)
+    void ResetSession();
 
     // Call at potential trigger points — returns true if welcome will be shown
     bool TryShowWelcome();

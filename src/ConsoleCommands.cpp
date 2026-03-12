@@ -812,8 +812,7 @@ namespace ConsoleCommands {
         }
 
         void SetModEnabled(RE::StaticFunctionTag*, bool a_enabled) {
-            Settings::bModEnabled = a_enabled;
-            Settings::Save();
+            Settings::bModEnabled = a_enabled;  // Session-only, global setting
             // Refresh powers to add/remove them based on new state
             RefreshPowers(nullptr);
             logger::info("SetModEnabled: {}", a_enabled);
@@ -824,7 +823,7 @@ namespace ConsoleCommands {
         }
 
         void SetDebugLogging(RE::StaticFunctionTag*, bool a_enabled) {
-            Settings::bDebugLogging = a_enabled;
+            Settings::bDebugLogging = a_enabled;  // Session-only, global setting
             if (a_enabled) {
                 spdlog::default_logger()->set_level(spdlog::level::debug);
                 spdlog::default_logger()->flush_on(spdlog::level::debug);
@@ -832,7 +831,6 @@ namespace ConsoleCommands {
                 spdlog::default_logger()->set_level(spdlog::level::info);
                 spdlog::default_logger()->flush_on(spdlog::level::info);
             }
-            Settings::Save();
             logger::info("SetDebugLogging: {}", a_enabled);
         }
 
@@ -841,8 +839,7 @@ namespace ConsoleCommands {
         }
 
         void SetSummonEnabled(RE::StaticFunctionTag*, bool a_enabled) {
-            Settings::bSummonEnabled = a_enabled;
-            Settings::Save();
+            Settings::SetSummonEnabled(a_enabled);
             logger::info("SetSummonEnabled: {}", a_enabled);
         }
 
@@ -851,8 +848,7 @@ namespace ConsoleCommands {
         }
 
         void SetInterceptActivation(RE::StaticFunctionTag*, bool a_enabled) {
-            Settings::bInterceptActivation = a_enabled;
-            Settings::Save();
+            Settings::SetInterceptActivation(a_enabled);
             logger::info("SetInterceptActivation: {}", a_enabled);
         }
 
@@ -861,8 +857,7 @@ namespace ConsoleCommands {
         }
 
         void SetShownWelcomeTutorial(RE::StaticFunctionTag*, bool a_shown) {
-            Settings::bShownWelcomeTutorial = a_shown;
-            Settings::Save();
+            Settings::SetShownWelcomeTutorial(a_shown);
             logger::info("SetShownWelcomeTutorial: {}", a_shown);
         }
 
@@ -875,8 +870,7 @@ namespace ConsoleCommands {
         }
 
         void SetIncludeUnlinkedContainers(RE::StaticFunctionTag*, bool a_enabled) {
-            Settings::bIncludeUnlinkedContainers = a_enabled;
-            Settings::Save();
+            Settings::SetIncludeUnlinkedContainers(a_enabled);
             logger::info("SetIncludeUnlinkedContainers: {}", a_enabled);
         }
 
@@ -885,8 +879,7 @@ namespace ConsoleCommands {
         }
 
         void SetIncludeSCIEContainers(RE::StaticFunctionTag*, bool a_enabled) {
-            Settings::bSCIEIncludeContainers = a_enabled;
-            Settings::Save();
+            Settings::SetSCIEIncludeContainers(a_enabled);
             logger::info("SetIncludeSCIEContainers: {}", a_enabled);
         }
 
@@ -899,8 +892,7 @@ namespace ConsoleCommands {
         }
 
         void SetSellPricePercent(RE::StaticFunctionTag*, float a_value) {
-            Settings::fSellPricePercent = std::clamp(a_value, 0.0f, 1.0f);
-            Settings::Save();
+            Settings::SetSellPricePercent(a_value);
         }
 
         int32_t GetSellBatchSize(RE::StaticFunctionTag*) {
@@ -908,8 +900,7 @@ namespace ConsoleCommands {
         }
 
         void SetSellBatchSize(RE::StaticFunctionTag*, int32_t a_value) {
-            Settings::iSellBatchSize = std::max(1, a_value);
-            Settings::Save();
+            Settings::SetSellBatchSize(a_value);
         }
 
         float GetSellIntervalHours(RE::StaticFunctionTag*) {
@@ -917,8 +908,7 @@ namespace ConsoleCommands {
         }
 
         void SetSellIntervalHours(RE::StaticFunctionTag*, float a_value) {
-            Settings::fSellIntervalHours = std::max(1.0f, a_value);
-            Settings::Save();
+            Settings::SetSellIntervalHours(a_value);
         }
 
         float GetVendorPricePercent(RE::StaticFunctionTag*) {
@@ -926,8 +916,7 @@ namespace ConsoleCommands {
         }
 
         void SetVendorPricePercent(RE::StaticFunctionTag*, float a_value) {
-            Settings::fVendorPricePercent = std::clamp(a_value, 0.0f, 1.0f);
-            Settings::Save();
+            Settings::SetVendorPricePercent(a_value);
         }
 
         int32_t GetVendorBatchSize(RE::StaticFunctionTag*) {
@@ -935,8 +924,7 @@ namespace ConsoleCommands {
         }
 
         void SetVendorBatchSize(RE::StaticFunctionTag*, int32_t a_value) {
-            Settings::iVendorBatchSize = std::max(1, a_value);
-            Settings::Save();
+            Settings::SetVendorBatchSize(a_value);
         }
 
         float GetVendorIntervalHours(RE::StaticFunctionTag*) {
@@ -944,8 +932,7 @@ namespace ConsoleCommands {
         }
 
         void SetVendorIntervalHours(RE::StaticFunctionTag*, float a_value) {
-            Settings::fVendorIntervalHours = std::max(1.0f, a_value);
-            Settings::Save();
+            Settings::SetVendorIntervalHours(a_value);
         }
 
         int32_t GetVendorCost(RE::StaticFunctionTag*) {
@@ -953,8 +940,7 @@ namespace ConsoleCommands {
         }
 
         void SetVendorCost(RE::StaticFunctionTag*, int32_t a_value) {
-            Settings::iVendorCost = std::max(0, a_value);
-            Settings::Save();
+            Settings::SetVendorCost(a_value);
         }
 
         // =================================================================
@@ -1127,8 +1113,7 @@ namespace ConsoleCommands {
         }
 
         void SetSCIEIntegration(RE::StaticFunctionTag*, bool a_enabled) {
-            Settings::bSCIEIntegration = a_enabled;
-            Settings::Save();
+            Settings::SetSCIEIntegration(a_enabled);
         }
 
         bool GetSCIEIncludeContainers(RE::StaticFunctionTag*) {
@@ -1136,8 +1121,7 @@ namespace ConsoleCommands {
         }
 
         void SetSCIEIncludeContainers(RE::StaticFunctionTag*, bool a_enabled) {
-            Settings::bSCIEIncludeContainers = a_enabled;
-            Settings::Save();
+            Settings::SetSCIEIncludeContainers(a_enabled);
         }
 
         // =================================================================

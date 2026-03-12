@@ -105,12 +105,12 @@ void ButtonBar::Draw(int a_selected, int a_hovered) {
 
         uint32_t color = ButtonColors::NORMAL;
         int alpha = ButtonColors::ALPHA_NORMAL;
-        if (a_selected == i) {
-            color = ButtonColors::SELECT;
-            alpha = ButtonColors::ALPHA_SELECT;
-        } else if (a_hovered == i) {
+        if (a_hovered == i) {
             color = ButtonColors::HOVER;
             alpha = ButtonColors::ALPHA_HOVER;
+        } else if (a_selected == i) {
+            color = ButtonColors::SELECT;
+            alpha = ButtonColors::ALPHA_SELECT;
         }
 
         DrawButton(i, color, alpha);

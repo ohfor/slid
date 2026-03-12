@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2026-03-12
+
+### Fixed
+
+- User settings (intercept activation, welcome tutorial, sale percentages, etc.) lost on mod update. Settings now persist in a separate override file that survives mod manager overwrites
+- Welcome tutorial blocked context menu on every power use until "don't show again" was checked. Now shows once per session, permanently dismissed via checkbox
+- MCM settings page could fail to initialize on existing saves due to version tracking issue
+
 ## [1.4.2] - 2026-03-12
 
 ### Added

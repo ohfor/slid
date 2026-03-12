@@ -94,12 +94,33 @@ namespace Settings {
     // Returns the full path to SLID.ini next to the DLL
     std::filesystem::path GetINIPath();
 
+    // Returns the full path to SLIDCustom.ini (user overrides, never shipped)
+    std::filesystem::path GetCustomINIPath();
+
     // Returns the path to the SLID data subfolder (SKSE/Plugins/SLID/)
     std::filesystem::path GetDataDir();
 
-    // Load settings from INI. Call once after logging is initialized.
+    // Load settings from INI. Reads SLID.ini (defaults), then overlays
+    // SLIDCustom.ini (user overrides). Call once after logging is initialized.
     void Load();
 
-    // Regenerate the INI file (stub — wired up in Milestone 9/MCM)
+    // Save user-changeable settings to SLIDCustom.ini (never overwrites SLID.ini).
     void Save();
+
+    // --- Setters for user-overridable settings ---
+    // Each setter assigns, marks dirty, and saves to SLIDCustom.ini.
+    // bModEnabled and bDebugLogging are global (SLID.ini only) — assign directly.
+    void SetShownWelcomeTutorial(bool a_val);
+    void SetInterceptActivation(bool a_val);
+    void SetSummonEnabled(bool a_val);
+    void SetIncludeUnlinkedContainers(bool a_val);
+    void SetSCIEIntegration(bool a_val);
+    void SetSCIEIncludeContainers(bool a_val);
+    void SetSellPricePercent(float a_val);
+    void SetSellBatchSize(int32_t a_val);
+    void SetSellIntervalHours(float a_val);
+    void SetVendorPricePercent(float a_val);
+    void SetVendorBatchSize(int32_t a_val);
+    void SetVendorIntervalHours(float a_val);
+    void SetVendorCost(int32_t a_val);
 }

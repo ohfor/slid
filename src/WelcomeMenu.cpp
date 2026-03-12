@@ -6,6 +6,7 @@
 namespace WelcomeMenu {
 
     static Menu* g_activeMenu = nullptr;
+    static bool s_shownThisSession = false;
 
     // =========================================================================
     // Menu
@@ -81,9 +82,9 @@ namespace WelcomeMenu {
             }
             case RE::UI_MESSAGE_TYPE::kHide: {
                 if (m_dontShowAgain) {
-                    Settings::bShownWelcomeTutorial = true;
-                    Settings::Save();
+                    Settings::SetShownWelcomeTutorial(true);
                 }
+                m_buttonBar.Destroy();
                 g_activeMenu = nullptr;
                 return RE::UI_MESSAGE_RESULTS::kHandled;
             }
@@ -102,8 +103,8 @@ namespace WelcomeMenu {
         if (screenW <= 0) screenW = 1280.0f;
         if (screenH <= 0) screenH = 720.0f;
 
-        float panelX = (screenW - POPUP_W) / 2.0f;
-        float panelY = (screenH - POPUP_H) / 2.0f;
+        m_panelX = (screenW - POPUP_W) / 2.0f;
+        m_panelY = (screenH - POPUP_H) / 2.0f;
 
         // Background (full screen dim)
         ScaleformUtil::DrawFilledRect(uiMovie.get(), "_dim", 1, 0.0, 0.0,
@@ -116,8 +117,8 @@ namespace WelcomeMenu {
         m_root.Invoke("createEmptyMovieClip", &m_panel, panelArgs, 2);
 
         RE::GFxValue posX, posY;
-        posX.SetNumber(static_cast<double>(panelX));
-        posY.SetNumber(static_cast<double>(panelY));
+        posX.SetNumber(static_cast<double>(m_panelX));
+        posY.SetNumber(static_cast<double>(m_panelY));
         m_panel.SetMember("_x", posX);
         m_panel.SetMember("_y", posY);
 
@@ -373,9 +374,10 @@ namespace WelcomeMenu {
     }
 
     void Menu::CreateCheckbox() {
-        // Align checkbox vertically centered with the OK button
-        float buttonY = POPUP_H - PADDING - BUTTON_H;
-        float checkboxY = buttonY + (BUTTON_H - CHECKBOX_SIZE) / 2.0f;
+        // Align checkbox vertically centered with the ButtonBar
+        float btnH = static_cast<float>(ButtonColors::HEIGHT);
+        float buttonY = POPUP_H - PADDING - btnH;
+        float checkboxY = buttonY + (btnH - CHECKBOX_SIZE) / 2.0f;
         float checkboxX = PADDING;
 
         // Checkbox box background clip
@@ -476,72 +478,15 @@ namespace WelcomeMenu {
     }
 
     void Menu::CreateButton() {
-        float buttonX = (POPUP_W - BUTTON_W) / 2.0f;
-        float buttonY = POPUP_H - PADDING - BUTTON_H;
+        // ButtonBar uses absolute screen coordinates (draws on _root)
+        double btnCenterX = static_cast<double>(m_panelX) + POPUP_W / 2.0;
+        double btnY = static_cast<double>(m_panelY) + POPUP_H - PADDING - ButtonColors::HEIGHT;
 
-        RE::GFxValue btnArgs[2];
-        btnArgs[0].SetString("okButton");
-        btnArgs[1].SetNumber(300);
-        RE::GFxValue buttonClip;
-        m_panel.Invoke("createEmptyMovieClip", &buttonClip, btnArgs, 2);
+        std::vector<ButtonDef> defs;
+        defs.push_back({T("$SLID_OK"), BUTTON_BAR_W});
 
-        RE::GFxValue posX, posY;
-        posX.SetNumber(static_cast<double>(buttonX));
-        posY.SetNumber(static_cast<double>(buttonY));
-        buttonClip.SetMember("_x", posX);
-        buttonClip.SetMember("_y", posY);
-
-        // Button background
-        {
-            RE::GFxValue fillArgs[2];
-            fillArgs[0].SetNumber(static_cast<double>(COLOR_BUTTON_BG));
-            fillArgs[1].SetNumber(100.0);
-            buttonClip.Invoke("beginFill", nullptr, fillArgs, 2);
-
-            RE::GFxValue pt[2];
-            pt[0].SetNumber(0.0); pt[1].SetNumber(0.0);
-            buttonClip.Invoke("moveTo", nullptr, pt, 2);
-            pt[0].SetNumber(static_cast<double>(BUTTON_W));
-            buttonClip.Invoke("lineTo", nullptr, pt, 2);
-            pt[1].SetNumber(static_cast<double>(BUTTON_H));
-            buttonClip.Invoke("lineTo", nullptr, pt, 2);
-            pt[0].SetNumber(0.0);
-            buttonClip.Invoke("lineTo", nullptr, pt, 2);
-            pt[1].SetNumber(0.0);
-            buttonClip.Invoke("lineTo", nullptr, pt, 2);
-            buttonClip.Invoke("endFill", nullptr, nullptr, 0);
-
-            // Border
-            RE::GFxValue styleArgs[3];
-            styleArgs[0].SetNumber(2.0);
-            styleArgs[1].SetNumber(static_cast<double>(COLOR_BUTTON_BORDER));
-            styleArgs[2].SetNumber(100.0);
-            buttonClip.Invoke("lineStyle", nullptr, styleArgs, 3);
-
-            pt[0].SetNumber(0.0); pt[1].SetNumber(0.0);
-            buttonClip.Invoke("moveTo", nullptr, pt, 2);
-            pt[0].SetNumber(static_cast<double>(BUTTON_W));
-            buttonClip.Invoke("lineTo", nullptr, pt, 2);
-            pt[1].SetNumber(static_cast<double>(BUTTON_H));
-            buttonClip.Invoke("lineTo", nullptr, pt, 2);
-            pt[0].SetNumber(0.0);
-            buttonClip.Invoke("lineTo", nullptr, pt, 2);
-            pt[1].SetNumber(0.0);
-            buttonClip.Invoke("lineTo", nullptr, pt, 2);
-        }
-
-        // Button text
-        float btnTextH = BODY_SIZE + 10.0f;
-        CreateTextField(buttonClip, "okText", 10, 0, (BUTTON_H - btnTextH) / 2.0f, BUTTON_W, btnTextH);
-        RE::GFxValue buttonText;
-        buttonClip.GetMember("okText", &buttonText);
-        if (!buttonText.IsUndefined()) {
-            SetTextFormat(buttonText, ScaleformUtil::GetFont(), static_cast<int>(BODY_SIZE), COLOR_BUTTON_TEXT, "center", false, false);
-            RE::GFxValue textVal;
-            std::string text = T("$SLID_OK");
-            textVal.SetString(text.c_str());
-            buttonText.SetMember("text", textVal);
-        }
+        m_buttonBar.Init(uiMovie.get(), "_welBtn", 300, defs, btnCenterX, btnY);
+        m_buttonBar.Draw(0, m_hoverIndex);
     }
 
     void Menu::UpdateCheckboxVisual() {
@@ -565,6 +510,35 @@ namespace WelcomeMenu {
             inputMgr->AddEventSink(GetSingleton());
             logger::info("WelcomeMenu::InputHandler registered");
         }
+    }
+
+    static void GetMousePos(RE::GFxMovieView* a_movie, float& a_mx, float& a_my) {
+        a_mx = 0.0f;
+        a_my = 0.0f;
+        if (a_movie) {
+            RE::GFxValue xVal, yVal;
+            a_movie->GetVariable(&xVal, "_root._xmouse");
+            a_movie->GetVariable(&yVal, "_root._ymouse");
+            a_mx = static_cast<float>(xVal.GetNumber());
+            a_my = static_cast<float>(yVal.GetNumber());
+        }
+    }
+
+    // Checkbox geometry constants (match CreateCheckbox layout)
+    static constexpr float CB_SIZE = 16.0f;
+    static constexpr float CB_POPUP_H = 520.0f;
+    static constexpr float CB_PADDING = 30.0f;
+
+    static bool HitTestCheckbox(float a_mx, float a_my, float a_panelX, float a_panelY) {
+        float btnH = static_cast<float>(ButtonColors::HEIGHT);
+        float buttonY = a_panelY + CB_POPUP_H - CB_PADDING - btnH;
+        float checkboxX = a_panelX + CB_PADDING;
+        float checkboxY = buttonY + (btnH - CB_SIZE) / 2.0f;
+        float checkboxHitW = CB_SIZE + 200.0f;
+        float checkboxHitH = CB_SIZE + 4.0f;
+
+        return (a_mx >= checkboxX && a_mx <= checkboxX + checkboxHitW &&
+                a_my >= checkboxY && a_my <= checkboxY + checkboxHitH);
     }
 
     RE::BSEventNotifyControl InputHandler::ProcessEvent(
@@ -604,54 +578,43 @@ namespace WelcomeMenu {
                 }
             }
 
-            // Mouse click handling
+            // Mouse handling (move + click)
             if (auto* mouseButton = event->AsButtonEvent();
-                mouseButton && mouseButton->IsDown() &&
-                mouseButton->GetDevice() == RE::INPUT_DEVICE::kMouse)
+                mouseButton && mouseButton->GetDevice() == RE::INPUT_DEVICE::kMouse)
             {
                 auto key = mouseButton->GetIDCode();
-                if (key == 0) {  // Left click
-                    // Get mouse position
-                    float mouseX = 0.0f, mouseY = 0.0f;
-                    if (g_activeMenu->uiMovie) {
-                        RE::GFxValue xVal, yVal;
-                        g_activeMenu->uiMovie->GetVariable(&xVal, "_root._xmouse");
-                        g_activeMenu->uiMovie->GetVariable(&yVal, "_root._ymouse");
-                        mouseX = static_cast<float>(xVal.GetNumber());
-                        mouseY = static_cast<float>(yVal.GetNumber());
-                    }
 
-                    // Get panel position
-                    RE::GFxValue panelX, panelY;
-                    g_activeMenu->m_panel.GetMember("_x", &panelX);
-                    g_activeMenu->m_panel.GetMember("_y", &panelY);
-                    float pX = static_cast<float>(panelX.GetNumber());
-                    float pY = static_cast<float>(panelY.GetNumber());
+                if (key == 0 && mouseButton->IsDown()) {
+                    // Left click
+                    float mx, my;
+                    GetMousePos(g_activeMenu->uiMovie.get(), mx, my);
 
-                    // Check checkbox hit (aligned with button)
-                    float buttonY = pY + Menu::POPUP_H - Menu::PADDING - Menu::BUTTON_H;
-                    float checkboxX = pX + Menu::PADDING;
-                    float checkboxY = buttonY + (Menu::BUTTON_H - Menu::CHECKBOX_SIZE) / 2.0f;
-                    float checkboxHitW = Menu::CHECKBOX_SIZE + 200.0f;
-                    float checkboxHitH = Menu::CHECKBOX_SIZE + 4.0f;
-
-                    if (mouseX >= checkboxX && mouseX <= checkboxX + checkboxHitW &&
-                        mouseY >= checkboxY && mouseY <= checkboxY + checkboxHitH)
-                    {
+                    // Checkbox hit
+                    if (HitTestCheckbox(mx, my, g_activeMenu->m_panelX, g_activeMenu->m_panelY)) {
                         g_activeMenu->m_dontShowAgain = !g_activeMenu->m_dontShowAgain;
                         g_activeMenu->UpdateCheckboxVisual();
                         return RE::BSEventNotifyControl::kStop;
                     }
 
-                    // Check OK button hit (buttonY already computed above)
-                    float buttonX = pX + (Menu::POPUP_W - Menu::BUTTON_W) / 2.0f;
-
-                    if (mouseX >= buttonX && mouseX <= buttonX + Menu::BUTTON_W &&
-                        mouseY >= buttonY && mouseY <= buttonY + Menu::BUTTON_H)
-                    {
+                    // ButtonBar hit
+                    int btn = g_activeMenu->m_buttonBar.HitTest(mx, my);
+                    if (btn >= 0) {
                         Menu::Hide();
                         return RE::BSEventNotifyControl::kStop;
                     }
+                }
+            }
+
+            // Mouse move — update hover
+            if (auto* moveEvent = event->AsIDEvent(); moveEvent &&
+                event->GetEventType() == RE::INPUT_EVENT_TYPE::kMouseMove)
+            {
+                float mx, my;
+                GetMousePos(g_activeMenu->uiMovie.get(), mx, my);
+                int btn = g_activeMenu->m_buttonBar.HitTest(mx, my);
+                if (btn != g_activeMenu->m_hoverIndex) {
+                    g_activeMenu->m_hoverIndex = btn;
+                    g_activeMenu->m_buttonBar.Draw(0, g_activeMenu->m_hoverIndex);
                 }
             }
         }
@@ -663,10 +626,16 @@ namespace WelcomeMenu {
     // Trigger
     // =========================================================================
 
+    void ResetSession() {
+        s_shownThisSession = false;
+    }
+
     bool TryShowWelcome() {
-        if (Settings::bShownWelcomeTutorial) {
+        if (Settings::bShownWelcomeTutorial || s_shownThisSession) {
             return false;
         }
+
+        s_shownThisSession = true;
 
         // Small delay to let other UI settle
         SKSE::GetTaskInterface()->AddTask([]() {
