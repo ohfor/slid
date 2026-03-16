@@ -15,6 +15,8 @@
 #include "WelcomeMenu.h"
 #include "FontTestMenu.h"
 #include "SCIEIntegration.h"
+#include "ContainerScanner.h"
+#include "ContainerUtils.h"
 #include "ContextResolver.h"
 #include "ContextMenu.h"
 #include "SellOverviewMenu.h"
@@ -372,10 +374,12 @@ namespace ConsoleCommands {
             constexpr RE::FormID kLocalShaderWhite  = 0x810;
             constexpr RE::FormID kLocalShaderBlue   = 0x811;
             constexpr RE::FormID kLocalShaderOrange = 0x815;
+            constexpr RE::FormID kLocalShaderGreen  = 0x828;
 
             auto* shaderWhite  = dataHandler->LookupForm<RE::TESEffectShader>(kLocalShaderWhite, kPluginName);
             auto* shaderBlue   = dataHandler->LookupForm<RE::TESEffectShader>(kLocalShaderBlue, kPluginName);
             auto* shaderOrange = dataHandler->LookupForm<RE::TESEffectShader>(kLocalShaderOrange, kPluginName);
+            auto* shaderGreen  = dataHandler->LookupForm<RE::TESEffectShader>(kLocalShaderGreen, kPluginName);
 
             if (!shaderWhite || !shaderBlue) {
                 logger::error("BeginDetect: shaders not found in ESP");
@@ -456,6 +460,29 @@ namespace ConsoleCommands {
                 }
             }
 
+            // Green shader for persistent, usable containers not already highlighted
+            int availableCount = 0;
+            if (shaderGreen) {
+                // Collect all FormIDs already highlighted above
+                std::set<RE::FormID> highlighted;
+                highlighted.insert(masters.begin(), masters.end());
+                highlighted.insert(containers.begin(), containers.end());
+                if (sellFormID != 0) highlighted.insert(sellFormID);
+
+                auto scanned = ContainerScanner::ScanCellContainers(0);
+                for (const auto& sc : scanned) {
+                    if (highlighted.count(sc.formID)) continue;
+
+                    auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(sc.formID);
+                    if (!ref) continue;
+                    if (ContainerUtils::IsNonPersistent(ref)) continue;
+
+                    ref->ApplyEffectShader(shaderGreen, kDetectDuration);
+                    ++applied;
+                    ++availableCount;
+                }
+            }
+
             // Build detection summary
             std::string summary = "SLID: " + TF("$SLID_NotifyDetected", std::to_string(applied));
 
@@ -481,8 +508,8 @@ namespace ConsoleCommands {
             RE::DebugNotification(summary.c_str());
             Feedback::OnDetectContainers();
 
-            logger::info("BeginDetect: {} masters (white), {} others (blue), sell={} (orange), {} total applied",
-                         masters.size(), containers.size(), sellFormID != 0 ? 1 : 0, applied);
+            logger::info("BeginDetect: {} masters (white), {} others (blue), sell={} (orange), {} available (green), {} total applied",
+                         masters.size(), containers.size(), sellFormID != 0 ? 1 : 0, availableCount, applied);
         }
 
         // Legacy path — called from old SetSell power (SPEL 0x816).
@@ -959,6 +986,12 @@ namespace ConsoleCommands {
                 result.push_back(RE::BSFixedString(n.c_str()));
             }
             return result;
+        }
+
+        bool IsNetworkActive(RE::StaticFunctionTag*, RE::BSFixedString a_networkName) {
+            auto* network = NetworkManager::GetSingleton()->FindNetwork(a_networkName.c_str());
+            if (!network) return false;
+            return !network->masterUnavailable;
         }
 
         RE::BSFixedString GetNetworkMasterName(RE::StaticFunctionTag*, RE::BSFixedString a_networkName) {
@@ -2243,6 +2276,16 @@ namespace ConsoleCommands {
             return;
         }
 
+        // Block non-persistent containers — they get evicted when their cell unloads,
+        // which would cause the network/assignment to become unavailable on reload.
+        if (targetFormID != 0) {
+            auto* targetRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(targetFormID);
+            if (targetRef && ContainerUtils::IsNonPersistent(targetRef)) {
+                RE::DebugNotification(T("$SLID_NonPersistentWarning").c_str());
+                return;
+            }
+        }
+
         // Guard against menu conflicts
         if (ContextMenu::Menu::IsOpen() ||
             SLIDMenu::ConfigMenu::IsOpen() ||
@@ -2327,6 +2370,7 @@ namespace ConsoleCommands {
         // MCM Link Page
         a_vm->RegisterFunction("GetNetworkCount"sv, className, GetNetworkCount);
         a_vm->RegisterFunction("GetNetworkNames"sv, className, GetNetworkNames);
+        a_vm->RegisterFunction("IsNetworkActive"sv, className, IsNetworkActive);
         a_vm->RegisterFunction("GetNetworkMasterName"sv, className, GetNetworkMasterName);
         a_vm->RegisterFunction("RunSort"sv, className, RunSort);
         a_vm->RegisterFunction("RunSweep"sv, className, RunSweep);

@@ -1,5 +1,6 @@
 #include "RestockConfigMenu.h"
 #include "ButtonBar.h"
+#include "MouseGlow.h"
 #include "ScaleformUtil.h"
 #include "TranslationService.h"
 
@@ -518,6 +519,9 @@ namespace RestockConfig {
         double divX = m_browserX + BROWSER_W + PANEL_GAP / 2.0;
         ScaleformUtil::DrawLine(uiMovie.get(), "_rsDivider", 108,
             divX, m_browserY + 4.0, divX, m_browserY + PANEL_H - 4.0, COLOR_DIVIDER);
+
+        // Mouse-following radial glow (depth 115: above chrome/headers, below content at 120)
+        MouseGlow::Create(uiMovie.get(), "_mouseGlow", 115, m_popupX, m_popupY, POPUP_W, POPUP_H);
 
         // Column headers
         ScaleformUtil::CreateLabel(uiMovie.get(), "_rsBrowserHdr", 109,
@@ -1234,6 +1238,7 @@ namespace RestockConfig {
         auto& m = *g_activeMenu;
 
         auto [mx, my] = m.GetMousePos();
+        MouseGlow::SetPosition(m.uiMovie.get(), "_mouseGlow", static_cast<double>(mx), static_cast<double>(my));
 
         // Browser hover
         int oldBrowserHover = m.m_browserHover;

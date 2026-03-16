@@ -179,7 +179,7 @@ namespace TraitEvaluator {
             logger::warn("TraitEvaluator: unknown slot '{}'", suffix);
             return false;
         }
-        return armor->GetSlotMask() == it->second;
+        return armor->HasPartOf(it->second);
     }
 
     // -----------------------------------------------------------------------

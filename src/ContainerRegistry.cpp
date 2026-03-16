@@ -1,4 +1,5 @@
 #include "ContainerRegistry.h"
+#include "ContainerUtils.h"
 
 #include <algorithm>
 #include <set>
@@ -96,6 +97,16 @@ std::vector<PickerEntry> ContainerRegistry::BuildPickerList(RE::FormID a_masterF
             result.push_back(std::move(entry));
         }
     }
+
+    // Remove non-persistent containers — they get evicted when their cell unloads
+    result.erase(
+        std::remove_if(result.begin(), result.end(),
+            [](const PickerEntry& entry) {
+                if (entry.formID == 0) return false;  // "Pass" entry
+                auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(entry.formID);
+                return ref && ContainerUtils::IsNonPersistent(ref);
+            }),
+        result.end());
 
     // Sort by group, then subGroup, then alphabetically within subGroup
     std::sort(result.begin(), result.end(),

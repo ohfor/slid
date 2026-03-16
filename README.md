@@ -33,13 +33,16 @@ SLID gives you one power: **SLID**. Cast it, and it reads the situation:
 
 Destructive actions (Destroy Link, Remove) require holding the button for one second to confirm.
 
-### Creating a Link
+### Quick Start
 
-1. Find a container you want as your master chest
-2. Cast **SLID** while looking at it and select **Create Link**
-3. Name your Link (defaults to the cell name)
-4. A config menu opens - assign filters to nearby containers
-5. Sort reshuffles all items across the network based on your filter configuration
+A **Link** is a network of containers. Pick one **master** (where you dump loot) and connect other containers to receive sorted items.
+
+1. **Create the Link** — Cast **SLID** at your chosen master container. Select **Create Link** and name it.
+2. **Add containers** — Walk to each container you want to use. Cast **SLID** at it and select **Add to Link**. Name it if you like (e.g. "Weapon Rack", "Alchemy Shelf").
+3. **Assign filters** — Cast **SLID** at your master and select **Configure**. The config menu shows filter categories (Weapons, Armor, Ingredients, etc.). For each filter, pick which container receives those items. Drag filters to set priority — higher filters claim items first.
+4. **Sort** — Drop loot in the master. Cast **SLID** at it and select **Sort**. Items flow to the right containers.
+
+**Shortcuts:** Enable "Include Unlinked Containers" in MCM Settings to skip step 2 — nearby containers appear in the config menu automatically. Or import a **Link Preset** (MCM > Presets) for supported player homes.
 
 ### Sorting Actions
 

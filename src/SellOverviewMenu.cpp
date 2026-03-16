@@ -1,4 +1,5 @@
 #include "SellOverviewMenu.h"
+#include "MouseGlow.h"
 #include "NetworkManager.h"
 #include "SalesProcessor.h"
 #include "VendorRegistry.h"
@@ -538,6 +539,9 @@ namespace SellOverview {
         // Background
         ScaleformUtil::DrawFilledRect(uiMovie.get(), "_popupBg", 1, m_popupX, m_popupY, POPUP_W, POPUP_H, COLOR_BG, ALPHA_BG);
         ScaleformUtil::DrawBorderRect(uiMovie.get(), "_popupBorder", 2, m_popupX, m_popupY, POPUP_W, POPUP_H, COLOR_BORDER);
+
+        // Mouse-following radial glow (depth 3: above border, below title at 10)
+        MouseGlow::Create(uiMovie.get(), "_mouseGlow", 3, m_popupX, m_popupY, POPUP_W, POPUP_H);
 
         // Title
         std::string title = T("$SLID_SellOverviewTitle");
@@ -1189,6 +1193,7 @@ namespace SellOverview {
         auto& menu = *g_activeMenu;
 
         auto [mx, my] = menu.GetMousePos();
+        MouseGlow::SetPosition(menu.uiMovie.get(), "_mouseGlow", static_cast<double>(mx), static_cast<double>(my));
         int oldHover = menu.m_hoverButton;
 
         // Hit test close button

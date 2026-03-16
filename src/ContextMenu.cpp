@@ -1,5 +1,6 @@
 #include "ContextMenu.h"
 #include "FilterRegistry.h"
+#include "MouseGlow.h"
 #include "NetworkManager.h"
 #include "TranslationService.h"
 
@@ -137,6 +138,10 @@ namespace ContextMenu {
         // Dim background
         ScaleformUtil::DrawFilledRect(uiMovie.get(), "_dim", 1,
             0.0, 0.0, screenW, screenH, 0x000000, ALPHA_DIM);
+
+        // Mouse-following radial glow (depth 13: above popup bg, below content)
+        MouseGlow::Create(uiMovie.get(), "_mouseGlow", 13, m_popupX, m_popupY, POPUP_W, popupH);
+        MouseGlow::SetPosition(uiMovie.get(), "_mouseGlow", screenW / 2.0, screenH / 2.0);
 
         DrawBackground();
         DrawTitle();
@@ -772,6 +777,22 @@ namespace ContextMenu {
         ScaleformUtil::DrawFilledRect(uiMovie.get(), "ctx_sub_accent", 67,
             m_subMenuX, m_subMenuY, SUBMENU_W, 2.0, COLOR_CURSOR, 90);
 
+        // Submenu mouse glow (depth 68: above sub bg/border/accent, below sub rows)
+        MouseGlow::Create(uiMovie.get(), "_mouseGlowSub", 68, m_subMenuX, m_subMenuY, SUBMENU_W, subH);
+        {
+            // Sync submenu glow to main glow's current position
+            RE::GFxValue mainGlow;
+            uiMovie->GetVariable(&mainGlow, "_root._mouseGlow");
+            if (!mainGlow.IsUndefined()) {
+                RE::GFxValue xVal, yVal;
+                mainGlow.GetMember("_x", &xVal);
+                mainGlow.GetMember("_y", &yVal);
+                MouseGlow::SetPosition(uiMovie.get(), "_mouseGlowSub",
+                    xVal.IsNumber() ? xVal.GetNumber() : 0.0,
+                    yVal.IsNumber() ? yVal.GetNumber() : 0.0);
+            }
+        }
+
         // Rows
         RedrawSubMenu();
     }
@@ -817,6 +838,9 @@ namespace ContextMenu {
 
         // Remove scrollbar
         removeClip("_root.ctx_sub_scrollbar");
+
+        // Remove submenu glow + its mask
+        MouseGlow::Destroy(uiMovie.get(), "_mouseGlowSub");
     }
 
     void Menu::RedrawSubMenu() {
@@ -1165,6 +1189,10 @@ namespace ContextMenu {
         float mx = static_cast<float>(xVal.GetNumber());
         float my = static_cast<float>(yVal.GetNumber());
 
+        // Reposition mouse-following radial glow(s)
+        MouseGlow::SetPosition(m.uiMovie.get(), "_mouseGlow", static_cast<double>(mx), static_cast<double>(my));
+        MouseGlow::SetPosition(m.uiMovie.get(), "_mouseGlowSub", static_cast<double>(mx), static_cast<double>(my));
+
         // Check submenu hit first
         if (m.m_subMenuVisible) {
             int subHit = m.HitTestSubMenu(mx, my);
@@ -1373,6 +1401,10 @@ namespace ContextMenu {
                     if (key == 0) {  // Left click
                         if (button->IsDown()) Menu::OnMouseDown();
                         else if (button->IsUp()) Menu::OnMouseUp();
+                    } else if ((key == 8 || key == 9) && button->IsDown()) {
+                        // Mouse wheel: 8 = up, 9 = down
+                        if (key == 8) Menu::CursorUp();
+                        else Menu::CursorDown();
                     }
                 }
 

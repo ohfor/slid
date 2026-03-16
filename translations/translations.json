@@ -369,7 +369,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "This container is temporary and cannot be used with SLID",
+    "$SLID_NetworkInactive": " (unavailable)",
+    "$SLID_NetworkInactiveDesc": "This Link was created on a non-persistent container that no longer exists in memory. Destroy this Link and recreate it using a permanent container."
   },
   "FRENCH": {
     "$SLID_PageSettings": "Paramètres",
@@ -741,7 +744,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "Ce conteneur est temporaire et ne peut pas être utilisé avec SLID",
+    "$SLID_NetworkInactive": " (indisponible)",
+    "$SLID_NetworkInactiveDesc": "Ce Lien a été créé sur un conteneur non persistant qui n'existe plus en mémoire. Détruisez ce Lien et recréez-le avec un conteneur permanent."
   },
   "GERMAN": {
     "$SLID_PageSettings": "Einstellungen",
@@ -1113,7 +1119,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "Dieser Behälter ist temporär und kann nicht mit SLID verwendet werden",
+    "$SLID_NetworkInactive": " (nicht verfügbar)",
+    "$SLID_NetworkInactiveDesc": "Dieses Netzwerk wurde auf einem nicht-persistenten Behälter erstellt, der nicht mehr im Speicher existiert. Zerstören Sie dieses Netzwerk und erstellen Sie es mit einem permanenten Behälter neu."
   },
   "ITALIAN": {
     "$SLID_PageSettings": "Impostazioni",
@@ -1485,7 +1494,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "Questo contenitore è temporaneo e non può essere usato con SLID",
+    "$SLID_NetworkInactive": " (non disponibile)",
+    "$SLID_NetworkInactiveDesc": "Questo Link è stato creato su un contenitore non persistente che non esiste più in memoria. Distruggi questo Link e ricrealo usando un contenitore permanente."
   },
   "SPANISH": {
     "$SLID_PageSettings": "Ajustes",
@@ -1857,7 +1869,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "Este contenedor es temporal y no se puede usar con SLID",
+    "$SLID_NetworkInactive": " (no disponible)",
+    "$SLID_NetworkInactiveDesc": "Este Enlace fue creado en un contenedor no persistente que ya no existe en memoria. Destruye este Enlace y recréalo usando un contenedor permanente."
   },
   "RUSSIAN": {
     "$SLID_PageSettings": "Настройки",
@@ -2229,7 +2244,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "Этот контейнер временный и не может использоваться с SLID",
+    "$SLID_NetworkInactive": " (недоступно)",
+    "$SLID_NetworkInactiveDesc": "Эта Связь была создана на непостоянном контейнере, который больше не существует в памяти. Уничтожьте эту Связь и создайте её заново, используя постоянный контейнер."
   },
   "POLISH": {
     "$SLID_PageSettings": "Ustawienia",
@@ -2601,7 +2619,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "Ten pojemnik jest tymczasowy i nie może być używany z SLID",
+    "$SLID_NetworkInactive": " (niedostępne)",
+    "$SLID_NetworkInactiveDesc": "Ten Link został utworzony na nietrwałym pojemniku, który nie istnieje już w pamięci. Zniszcz ten Link i utwórz go ponownie, używając trwałego pojemnika."
   },
   "CZECH": {
     "$SLID_PageSettings": "Nastavení",
@@ -2973,7 +2994,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "Tento kontejner je dočasný a nelze jej použít se SLID",
+    "$SLID_NetworkInactive": " (nedostupné)",
+    "$SLID_NetworkInactiveDesc": "Tento Link byl vytvořen na neperzistentním kontejneru, který již v paměti neexistuje. Zničte tento Link a vytvořte jej znovu s použitím trvalého kontejneru."
   },
   "TURKISH": {
     "$SLID_PageSettings": "Ayarlar",
@@ -3345,7 +3369,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "Bu kap geçicidir ve SLID ile kullanılamaz",
+    "$SLID_NetworkInactive": " (kullanılamıyor)",
+    "$SLID_NetworkInactiveDesc": "Bu Bağlantı artık bellekte bulunmayan geçici bir kapta oluşturulmuş. Bu Bağlantıyı yok edin ve kalıcı bir kap kullanarak yeniden oluşturun."
   },
   "JAPANESE": {
     "$SLID_PageSettings": "設定",
@@ -3717,7 +3744,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "このコンテナは一時的なもので、SLIDでは使用できません",
+    "$SLID_NetworkInactive": " (利用不可)",
+    "$SLID_NetworkInactiveDesc": "このリンクはメモリに存在しなくなった非永続コンテナ上に作成されました。このリンクを破棄し、永続的なコンテナを使用して再作成してください。"
   },
   "KOREAN": {
     "$SLID_PageSettings": "설정",
@@ -4089,7 +4119,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "이 컨테이너는 임시이며 SLID에서 사용할 수 없습니다",
+    "$SLID_NetworkInactive": " (사용 불가)",
+    "$SLID_NetworkInactiveDesc": "이 링크는 더 이상 메모리에 존재하지 않는 비영구 컨테이너에 생성되었습니다. 이 링크를 파괴하고 영구 컨테이너를 사용하여 다시 만드세요."
   },
   "SCHINESE": {
     "$SLID_PageSettings": "设置",
@@ -4461,7 +4494,10 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "此容器是临时的，无法与SLID一起使用",
+    "$SLID_NetworkInactive": " (不可用)",
+    "$SLID_NetworkInactiveDesc": "此链接创建在一个不再存在于内存中的非持久容器上。请销毁此链接并使用永久容器重新创建。"
   },
   "TCHINESE": {
     "$SLID_PageSettings": "設定",
@@ -4833,6 +4869,9 @@
     "$SLID_FontTest": "Localisation Support",
     "$SLID_FontTestDesc": "Display sample text in all 13 supported languages to verify font rendering.",
     "$SLID_FontTestClose": "The font test popup will appear after closing this menu.",
-    "$SLID_FontTestTitle": "Localisation Support"
+    "$SLID_FontTestTitle": "Localisation Support",
+    "$SLID_NonPersistentWarning": "此容器是暫時的，無法與SLID一起使用",
+    "$SLID_NetworkInactive": " (不可用)",
+    "$SLID_NetworkInactiveDesc": "此連結建立在一個不再存在於記憶體中的非持久容器上。請銷毀此連結並使用永久容器重新建立。"
   }
 }

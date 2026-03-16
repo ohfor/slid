@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.21)
 # ---- Versioning ----
 set(VERSION_MAJOR 1)
 set(VERSION_MINOR 4)
-set(VERSION_PATCH 3)
+set(VERSION_PATCH 4)
 
 # ---- Project ----
 project(
@@ -105,6 +105,7 @@ set(SOURCES
     src/RestockCategory.cpp
     src/RestockConfigMenu.cpp
     src/ButtonBar.cpp
+    src/MouseGlow.cpp
     src/DisplayName.cpp
 )
 
@@ -155,6 +156,7 @@ set(HEADERS
     include/RestockCategory.h
     src/RestockConfigMenu.h
     include/ButtonBar.h
+    include/MouseGlow.h
     include/DisplayName.h
 )
 

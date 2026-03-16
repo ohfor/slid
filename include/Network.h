@@ -25,4 +25,7 @@ struct Network {
 
     // Restock configuration (per-network)
     RestockCategory::RestockConfig restockConfig;
+
+    // Runtime-only state (not persisted to cosave)
+    bool masterUnavailable = false;  // Set by ValidateNetworks when master can't be resolved
 };

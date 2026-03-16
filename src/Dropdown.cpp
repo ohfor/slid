@@ -1,5 +1,6 @@
 #include "Dropdown.h"
 #include "MenuLayout.h"
+#include "MouseGlow.h"
 #include "ScaleformUtil.h"
 
 // --- Static member ---
@@ -9,8 +10,9 @@ Dropdown* Dropdown::s_openInstance = nullptr;
 static constexpr int DEPTH_DIM         = 600;
 static constexpr int DEPTH_BG          = 601;
 static constexpr int DEPTH_BORDER      = 602;
-static constexpr int DEPTH_TITLE       = 603;
-static constexpr int DEPTH_SEP         = 604;
+static constexpr int DEPTH_GLOW        = 603;  // MouseGlow (mask at 604)
+static constexpr int DEPTH_TITLE       = 605;
+static constexpr int DEPTH_SEP         = 606;
 static constexpr int DEPTH_ROW_BASE    = 610;  // 610..617
 static constexpr int DEPTH_SCROLL_TRACK = 618;
 static constexpr int DEPTH_SCROLL_THUMB = 619;
@@ -445,6 +447,9 @@ void Dropdown::OnScrollWheel(int a_direction) {
 void Dropdown::UpdateHover(float a_mx, float a_my) {
     if (!m_open) return;
 
+    MouseGlow::SetPosition(m_movie, "_ddGlow",
+        static_cast<double>(a_mx), static_cast<double>(a_my));
+
     int oldHover = m_hoverIndex;
     m_hoverIndex = -1;
 
@@ -554,6 +559,10 @@ void Dropdown::DrawPopup() {
     // Border
     ScaleformUtil::DrawBorderRect(m_movie, "_ddBorder", DEPTH_BORDER,
         popupX, popupY, m_config.width, neededH, COLOR_BORDER);
+
+    // Mouse glow (masked to popup bounds)
+    MouseGlow::Create(m_movie, "_ddGlow", DEPTH_GLOW,
+        popupX, popupY, m_config.width, neededH);
 
     double currentY = popupY + PAD;
 
@@ -861,6 +870,7 @@ void Dropdown::DestroyPopupVisuals() {
     removeClip("_ddDim");
     removeClip("_ddBg");
     removeClip("_ddBorder");
+    MouseGlow::Destroy(m_movie, "_ddGlow");
     removeTextField("_ddTitle");
     removeClip("_ddSep");
     removeClip("_ddScrollTrack");

@@ -648,41 +648,37 @@ NetworkManager::ValidationResult NetworkManager::ValidateNetworks() {
     }
 
     // Validate networks and filter references
-    for (auto netIt = m_networks.begin(); netIt != m_networks.end();) {
-        auto* masterRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(netIt->masterFormID);
+    // Non-persistent refs may be unloaded with their cell — don't destroy data,
+    // just mark the network as unavailable until the player revisits the area.
+    for (auto& net : m_networks) {
+        auto* masterRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(net.masterFormID);
         if (!masterRef) {
-            logger::warn("Network '{}': master {:08X} no longer valid, removing network",
-                         netIt->name, netIt->masterFormID);
-            netIt = m_networks.erase(netIt);
-            ++result.prunedNetworks;
-            continue;
+            logger::warn("Network '{}': master {:08X} not resolvable (cell may be unloaded), marking unavailable",
+                         net.name, net.masterFormID);
+            net.masterUnavailable = true;
+        } else {
+            net.masterUnavailable = false;
         }
 
-        // Validate filter containerFormIDs resolve directly
-        for (auto& filter : netIt->filters) {
+        // Validate filter containerFormIDs — log but don't clear
+        for (const auto& filter : net.filters) {
             if (filter.containerFormID != 0) {
                 auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(filter.containerFormID);
                 if (!ref) {
-                    logger::warn("Network '{}': filter '{}' references {:08X} which no longer exists, clearing",
-                                 netIt->name, filter.filterID, filter.containerFormID);
-                    filter.containerFormID = 0;
-                    ++result.prunedFilters;
+                    logger::warn("Network '{}': filter '{}' container {:08X} not resolvable (cell may be unloaded), preserving assignment",
+                                 net.name, filter.filterID, filter.containerFormID);
                 }
             }
         }
 
-        // Validate catch-all
-        if (netIt->catchAllFormID != 0) {
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(netIt->catchAllFormID);
+        // Validate catch-all — log but don't clear
+        if (net.catchAllFormID != 0) {
+            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(net.catchAllFormID);
             if (!ref) {
-                logger::warn("Network '{}': catchAll {:08X} no longer exists, clearing",
-                             netIt->name, netIt->catchAllFormID);
-                netIt->catchAllFormID = 0;
-                ++result.prunedFilters;
+                logger::warn("Network '{}': catchAll {:08X} not resolvable (cell may be unloaded), preserving assignment",
+                             net.name, net.catchAllFormID);
             }
         }
-
-        ++netIt;
     }
 
     // Validate tag registry — prune dead FormIDs

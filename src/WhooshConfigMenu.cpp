@@ -1,6 +1,7 @@
 #include "WhooshConfigMenu.h"
 #include "ButtonBar.h"
 #include "FilterRegistry.h"
+#include "MouseGlow.h"
 #include "ScaleformUtil.h"
 #include "TranslationService.h"
 
@@ -234,6 +235,10 @@ namespace WhooshConfig {
         ScaleformUtil::DrawFilledRect(uiMovie.get(), "_whooshBg", 101, m_popupX, m_popupY, m_popupW, m_popupH, COLOR_BG, ALPHA_BG);
         ScaleformUtil::DrawBorderRect(uiMovie.get(), "_whooshBorder", 102, m_popupX, m_popupY, m_popupW, m_popupH, COLOR_BORDER);
 
+        // Mouse-following radial glow (depth 105: above subtitle 104, below grid at 110)
+        // Note: mask occupies depth+1 (106), so both 105 and 106 must be free
+        MouseGlow::Create(uiMovie.get(), "_mouseGlow", 105, m_popupX, m_popupY, m_popupW, m_popupH);
+
         // Title
         std::string title = T("$SLID_WhooshCategories");
         ScaleformUtil::CreateLabel(uiMovie.get(), "_whooshTitle", 103, m_popupX + 20.0, m_popupY + 12.0,
@@ -442,6 +447,7 @@ namespace WhooshConfig {
         auto& menu = *g_activeMenu;
 
         auto [mx, my] = menu.GetMousePos();
+        MouseGlow::SetPosition(menu.uiMovie.get(), "_mouseGlow", static_cast<double>(mx), static_cast<double>(my));
         int oldHoverBtn = menu.m_hoverBtnIndex;
 
         // Grid hover
@@ -557,6 +563,10 @@ namespace WhooshConfig {
                 if (key == 0) {
                     if (isDown) Menu::OnMouseDown();
                     else if (isUp) Menu::CancelButtonHold();
+                } else if ((key == 8 || key == 9) && isDown) {
+                    // Mouse wheel: 8 = up, 9 = down
+                    if (key == 8) Menu::NavigateUp();
+                    else Menu::NavigateDown();
                 }
                 continue;
             }

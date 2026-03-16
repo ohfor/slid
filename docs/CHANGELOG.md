@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] - 2026-03-16
+
+### Added
+
+- **Detect highlights usable containers** — casting the context power into empty air (Detect) now highlights persistent, usable containers in the current cell with a green shader, in addition to the existing white (masters), blue (tagged/assigned), and orange (sell) highlights. Helps identify which containers are safe to use with SLID before setting up a Link. Note: some mod-added containers may not display the shader effect due to their mesh/material setup — they still function correctly as SLID targets
+- **Non-persistent container safeguards** — SLID now blocks non-persistent (temporary) containers from being used as Link masters or filter targets. Non-persistent containers are evicted from memory when their cell unloads, which previously caused networks and settings to vanish on reload. Casting the context power on a non-persistent container shows a warning notification. The container picker no longer lists non-persistent containers. Networks created on non-persistent containers before this update are preserved but shown as "(unavailable)" in the MCM with an explanation, and can be safely destroyed
+
+- **Keyword fallback for jewelry filters** — `armor` and `valuables` root filters now include `keyword:VendorItemJewelry` as a fallback. Mods like Mara that strip biped slots from rings/amulets at runtime no longer cause jewelry to misroute into armor — items land in valuables instead
+
+### Fixed
+
+- **Slot matching for modded armor** — `slot:ring`, `slot:amulet`, etc. now use contains-check (`HasPartOf`) instead of exact equality. Armor pieces with extra biped slots (e.g. a ring that also occupies the Hair slot for visual effects) now match correctly
+- **Networks and filter assignments no longer destroyed on reload** — `ValidateNetworks()` previously deleted entire networks and cleared filter/catch-all container assignments when `LookupByID` returned null. This happened when the referenced container's cell was unloaded, which is normal for non-persistent refs. Now preserves all data and marks affected networks as unavailable instead. Matches user reports of networks vanishing on reload (backlog #27)
+- Mouse wheel scrolling now works in the context menu's Open container submenu. Previously only keyboard arrows and gamepad d-pad could scroll the list — mouse wheel events were not wired up
+- Mouse wheel scrolling now works in the Whoosh category configurator when the grid exceeds visible height
+
 ## [1.4.3] - 2026-03-12
 
 ### Fixed

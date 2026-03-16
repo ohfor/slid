@@ -80,7 +80,7 @@ string[] _networkNames
 ; =============================================================================
 
 int function GetVersion()
-    return 10403  ; 1.4.3 -> MAJOR*10000 + MINOR*100 + PATCH
+    return 10404  ; 1.4.4 -> MAJOR*10000 + MINOR*100 + PATCH
 endFunction
 
 event OnConfigInit()
@@ -252,12 +252,27 @@ function RenderLinkPage()
         _selectedNetwork = _networkNames[0]
     endif
 
+    ; Check if the selected network's master is unavailable
+    bool isActive = SLID_Native.IsNetworkActive(_selectedNetwork)
+    int actionFlag = OPTION_FLAG_NONE
+    if (!isActive)
+        actionFlag = OPTION_FLAG_DISABLED
+    endif
+
     ; Link Actions section with selector and action buttons
     AddHeaderOption("$SLID_HeaderLinkActions")
-    _oidNetworkSelector = AddMenuOption("$SLID_SelectLink", _selectedNetwork)
-    _oidRunSort = AddTextOption("$SLID_RunSort", "")
-    _oidRunSweep = AddTextOption("$SLID_RunSweep", "")
+    string displayName = _selectedNetwork
+    if (!isActive)
+        displayName = _selectedNetwork + "$SLID_NetworkInactive"
+    endif
+    _oidNetworkSelector = AddMenuOption("$SLID_SelectLink", displayName)
+    _oidRunSort = AddTextOption("$SLID_RunSort", "", actionFlag)
+    _oidRunSweep = AddTextOption("$SLID_RunSweep", "", actionFlag)
     _oidDestroyLink = AddTextOption("$SLID_DestroyLink", "")
+
+    if (!isActive)
+        AddTextOption("$SLID_NetworkInactiveDesc", "", OPTION_FLAG_DISABLED)
+    endif
 
     ; Move to right column for container list
     SetCursorPosition(1)

@@ -4,7 +4,7 @@ This guide explains how mod authors can integrate their mods with SLID (Skyrim L
 
 ## Overview
 
-SLID automatically discovers INI files matching `*SLID*.ini` in the `Data/SKSE/Plugins/SLID/` folder. By shipping a simple INI file with your mod, you can:
+SLID automatically discovers INI files matching `*SLID_*.ini` in the `Data/SKSE/Plugins/SLID/` folder. By shipping a simple INI file with your mod, you can:
 
 - Add custom filters that appear in SLID's config menu
 - Filter items by keyword, FormList membership, or other traits
@@ -16,10 +16,10 @@ No DLL required. No API calls. Just data.
 
 ## Quick Start
 
-Create a file named `YourModName_SLID.ini` in `Data/SKSE/Plugins/SLID/`:
+Create a file named `SLID_YourMod.ini` in `Data/SKSE/Plugins/SLID/`:
 
 ```ini
-; YourModName_SLID.ini
+; SLID_YourMod.ini
 [Filter:yourmod_special]
 Enabled = true
 Display = My Special Items
@@ -30,6 +30,8 @@ DefaultExclude = false
 ```
 
 That's it. When SLID loads, it discovers your filter and makes it available to users.
+
+> **Naming:** The recommended convention is `SLID_YourMod.ini`. If you need your filters to load after SLID's built-in files (e.g., to override defaults), use a `zPatch_` prefix: `zPatch_SLID_YourMod.ini`. Any filename matching `*SLID_*.ini` works.
 
 ---
 
@@ -176,7 +178,7 @@ RequireAnyTrait = keyword:WeapMaterialEbony|keyword:WeapMaterialDaedric
 Your mod adds a keyword `MyMod_Artifact` to special items:
 
 ```ini
-; MyMod_SLID.ini
+; SLID_MyMod.ini
 [Filter:mymod_artifacts]
 Enabled = true
 Display = MyMod Artifacts
@@ -191,7 +193,7 @@ DefaultExclude = true
 Your mod maintains a FormList of collectible items:
 
 ```ini
-; MyMod_SLID.ini
+; SLID_MyMod.ini
 [Filter:mymod_collectibles]
 Enabled = true
 Display = MyMod Collectibles
@@ -206,7 +208,7 @@ DefaultExclude = true
 Add a child filter under an existing SLID family:
 
 ```ini
-; MyMod_SLID.ini
+; SLID_MyMod.ini
 [Filter:mymod_weapons]
 Enabled = true
 Display = MyMod Weapons
@@ -248,7 +250,7 @@ The easiest way to create a preset is to configure a Link in-game, then export i
 3. Select your Link from the dropdown
 4. Click "Generate Preset INI"
 5. Find `SLID_GEN_{name}.ini` in `Data/SKSE/Plugins/SLID/`
-6. Rename it to `YourMod_SLID.ini` and add a `RequirePlugin` line
+6. Rename it to `SLID_YourMod.ini` and add a `RequirePlugin` line
 
 The generated file contains all four preset sections with inline comments for readability.
 
@@ -358,7 +360,7 @@ If the display name is empty, SLID falls back to the container's base object nam
 ### Example: Player Home Storage
 
 ```ini
-; MyHome_SLID.ini
+; SLID_MyHome.ini
 [ContainerList:My Awesome Home]
 RequirePlugin = MyHome.esp
 Description = Storage containers in My Awesome Home.
@@ -390,7 +392,7 @@ MyHome.esp|0x001238 = Pantry
 ## Troubleshooting
 
 **Filter doesn't appear:**
-- Check the filename matches `*SLID*.ini`
+- Check the filename matches `*SLID_*.ini`
 - Verify `RequirePlugin` ESP is actually loaded
 - Check SLID.log for parsing errors
 

@@ -12,6 +12,7 @@
 #include "FilterRegistry.h"
 #include "FilterRow.h"
 #include "HoldRemove.h"
+#include "MouseGlow.h"
 #include "NetworkManager.h"
 #include "OriginPanel.h"
 #include "ScaleformUtil.h"
@@ -185,6 +186,10 @@ namespace SLIDMenu {
         // Panel background
         ScaleformUtil::DrawFilledRect(uiMovie.get(), "_panelBg", 1, PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 0x000000, 92);
         ScaleformUtil::DrawBorderRect(uiMovie.get(), "_panelBorder", 2, PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 0x555555);
+
+        // Mouse-following radial glow (depth 38: above chrome bands, below title at 40)
+        // Note: mask occupies depth+1 (39), so both 38 and 39 must be free
+        MouseGlow::Create(uiMovie.get(), "_mouseGlow", 38, PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
 
         // Title
         ScaleformUtil::CreateLabel(uiMovie.get(), "_title", 40, PANEL_X + 20.0, PANEL_Y + 12.0, 500.0, 34.0,
@@ -680,6 +685,10 @@ namespace SLIDMenu {
 
         if (event->eventType == RE::INPUT_EVENT_TYPE::kMouseMove) {
             auto [mx, my] = FilterPanel::GetMousePos();
+            MouseGlow::SetPosition(menu.uiMovie.get(), "_mouseGlow", static_cast<double>(mx), static_cast<double>(my));
+            if (Dropdown::IsAnyOpen()) {
+                Dropdown::GetOpen()->UpdateHover(mx, my);
+            }
             FilterPanel::OnMouseMove();
             CatchAllPanel::UpdateHover(mx, my);
 
