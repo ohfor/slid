@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.5] - 2026-03-18
+
+### Added
+
+- **Numeric biped slot support** — filters can now use `slot:30` through `slot:61` for any equipment slot, enabling custom gear filtering (bracelets, cloaks, backpacks, etc.). New named aliases `head`, `body`, `hands`, `feet` join existing `ring`, `amulet`, `circlet`, `shield`
+
 ## [1.4.4] - 2026-03-16
 
 ### Added

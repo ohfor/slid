@@ -143,17 +143,58 @@ RequireTrait = armor_weight:heavy
 RequireTrait = armor_weight:clothing
 ```
 
-### `slot:SlotNumber`
+### `slot:Name` or `slot:Number`
 
-Matches armor by equip slot.
+Matches armor by biped equipment slot. Use named aliases for common slots,
+or numeric game slot numbers (30–61) for any slot.
+
+**Named aliases:**
+
+| Alias | Slot | Description |
+|-------|------|-------------|
+| `head` | 30 | Helmets, hoods |
+| `body` | 32 | Cuirass, robes |
+| `hands` | 33 | Gauntlets, gloves |
+| `feet` | 37 | Boots, shoes |
+| `ring` | 36 | Rings |
+| `amulet` | 35 | Amulets, necklaces |
+| `circlet` | 42 | Circlets, crowns |
+| `shield` | 39 | Shields |
+
+**Numeric examples:**
 
 ```ini
-RequireTrait = slot:32   ; Head
-RequireTrait = slot:33   ; Hair
-RequireTrait = slot:35   ; Amulet
-RequireTrait = slot:36   ; Ring
-RequireTrait = slot:37   ; Feet
+RequireTrait = slot:30       ; Head
+RequireTrait = slot:32       ; Body
+RequireTrait = slot:37       ; Feet
+RequireTrait = slot:46       ; Cloaks (mod-defined)
+RequireTrait = slot:47       ; Backpacks (mod-defined)
+RequireTrait = slot:54       ; Bracelets (mod-defined)
+RequireTrait = slot:ring     ; Same as slot:36
 ```
+
+**Full slot reference (30–61):**
+
+| Slot | Name | Common Use |
+|------|------|------------|
+| 30 | Head | Helmets, hoods |
+| 31 | Hair | Hair, wigs |
+| 32 | Body | Cuirass, robes |
+| 33 | Hands | Gauntlets, gloves |
+| 34 | Forearms | Bracers |
+| 35 | Amulet | Amulets, necklaces |
+| 36 | Ring | Rings |
+| 37 | Feet | Boots, shoes |
+| 38 | Calves | Shin guards |
+| 39 | Shield | Shields |
+| 40 | Tail | Tails (Khajiit/Argonian) |
+| 41 | LongHair | Long hair, ponytails |
+| 42 | Circlet | Circlets, crowns |
+| 43 | Ears | Ear meshes |
+| 44–61 | Unnamed | Mod-defined slots |
+
+Slots 44+ are unnamed in the engine. Common modding conventions:
+46 = Cloaks, 47 = Backpacks/Capes, 54 = Bracelets, 55 = Face jewelry.
 
 ### Combining Traits
 

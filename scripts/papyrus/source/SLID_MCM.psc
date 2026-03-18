@@ -80,7 +80,7 @@ string[] _networkNames
 ; =============================================================================
 
 int function GetVersion()
-    return 10404  ; 1.4.4 -> MAJOR*10000 + MINOR*100 + PATCH
+    return 10405  ; 1.4.5 -> MAJOR*10000 + MINOR*100 + PATCH
 endFunction
 
 event OnConfigInit()

@@ -55,6 +55,10 @@ namespace TraitEvaluator {
     using Slot = RE::BGSBipedObjectForm::BipedObjectSlot;
 
     static const std::unordered_map<std::string, Slot> s_slotMap = {
+        {"head",    Slot::kHead},
+        {"body",    Slot::kBody},
+        {"hands",   Slot::kHands},
+        {"feet",    Slot::kFeet},
         {"ring",    Slot::kRing},
         {"amulet",  Slot::kAmulet},
         {"circlet", Slot::kCirclet},
@@ -162,7 +166,7 @@ namespace TraitEvaluator {
     }
 
     // -----------------------------------------------------------------------
-    // Handler: slot:X (ring, amulet, circlet, shield)
+    // Handler: slot:X (head, body, hands, feet, ring, amulet, circlet, shield, or 30-61)
     // -----------------------------------------------------------------------
 
     static bool EvalSlot(const std::string& suffix, RE::TESBoundObject* item) {
@@ -175,11 +179,23 @@ namespace TraitEvaluator {
         }
 
         auto it = s_slotMap.find(suffix);
-        if (it == s_slotMap.end()) {
+        if (it != s_slotMap.end()) {
+            return armor->HasPartOf(it->second);
+        }
+
+        // Numeric slot fallback: game slots 30–61 → bit (N-30)
+        try {
+            int slot = std::stoi(suffix);
+            if (slot < 30 || slot > 61) {
+                logger::warn("TraitEvaluator: slot '{}' out of range (30-61)", suffix);
+                return false;
+            }
+            auto mask = static_cast<Slot>(1u << (slot - 30));
+            return armor->HasPartOf(mask);
+        } catch (...) {
             logger::warn("TraitEvaluator: unknown slot '{}'", suffix);
             return false;
         }
-        return armor->HasPartOf(it->second);
     }
 
     // -----------------------------------------------------------------------
