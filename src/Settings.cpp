@@ -1,7 +1,6 @@
 #include "Settings.h"
 
 #include <Windows.h>
-#include <ShlObj.h>
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
@@ -110,43 +109,9 @@ namespace Settings {
     }
 
     std::filesystem::path GetUserDataDir() {
-        // Derive game folder name from DLL path (same pattern as GetLogDirectory in main.cpp)
-        HMODULE hModule = nullptr;
-        if (!GetModuleHandleExW(
-                GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                reinterpret_cast<LPCWSTR>(&GetUserDataDir), &hModule)) {
-            return {};
-        }
-
-        wchar_t dllPath[MAX_PATH];
-        if (GetModuleFileNameW(hModule, dllPath, MAX_PATH) == 0) {
-            return {};
-        }
-
-        // DLL path: {GameRoot}\Data\SKSE\Plugins\SLID.dll
-        // Navigate up 4 levels to get game root, then extract folder name
-        std::filesystem::path dllLocation = dllPath;
-        auto gameRoot = dllLocation.parent_path()  // Plugins
-                                   .parent_path()  // SKSE
-                                   .parent_path()  // Data
-                                   .parent_path(); // GameRoot
-        auto gameFolderName = gameRoot.filename();
-
-        // Get Documents folder
-        wchar_t* docPath = nullptr;
-        if (!SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docPath))) {
-            return {};
-        }
-
-        std::filesystem::path result = docPath;
-        CoTaskMemFree(docPath);
-
-        // Build: Documents\My Games\{GameFolderName}\SKSE\SLID
-        result /= "My Games";
-        result /= gameFolderName;
-        result /= "SKSE";
-        result /= "SLID";
-        return result;
+        auto logDir = SKSE::log::log_directory();
+        if (!logDir) return {};
+        return *logDir / "SLID";
     }
 
     std::filesystem::path GetUserCustomINIPath() {

@@ -152,6 +152,12 @@ namespace {
         void SetParent(const IFilter* a_parent) { m_parent = a_parent; }
         bool IsDefaultExclude() const { return m_defaultExclude; }
 
+        void CollectTraits(std::unordered_set<std::string>& out) const {
+            for (const auto& t : m_requireTraits) out.insert(t);
+            for (const auto& t : m_excludeTraits) out.insert(t);
+            for (const auto& t : m_requireAnyTraits) out.insert(t);
+        }
+
     private:
         std::string m_id;
         std::string m_displayName;
@@ -293,6 +299,25 @@ namespace {
         return result;
     }
 
+    // -----------------------------------------------------------------------
+    // CatchAllFilter — synthetic filter that matches everything.
+    // Not part of the family hierarchy, not shown in Whoosh config or INI export.
+    // -----------------------------------------------------------------------
+
+    class CatchAllFilter : public IFilter {
+    public:
+        std::string_view GetID() const override { return FilterRegistry::kCatchAllFilterID; }
+        std::string_view GetDisplayName() const override { return "Catch-All"; }
+        std::string_view GetDescription() const override { return "Catches all unclaimed items"; }
+        bool Matches([[maybe_unused]] RE::TESBoundObject* a_item) const override { return true; }
+        const IFilter* GetParent() const override { return nullptr; }
+        void BindContainer(RE::FormID a_containerFormID) const override { m_containerFormID = a_containerFormID; }
+        RE::FormID GetContainer() const override { return m_containerFormID; }
+        RE::FormID Route([[maybe_unused]] RE::TESBoundObject* a_item) const override { return m_containerFormID; }
+    private:
+        mutable RE::FormID m_containerFormID = 0;
+    };
+
 }  // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -397,6 +422,9 @@ void FilterRegistry::Init() {
     // Store default-excluded set
     m_defaultExcluded = std::move(defaultExcluded);
 
+    // Register synthetic catch-all filter (not in m_order, not in family hierarchy)
+    m_filters[kCatchAllFilterID] = std::make_unique<CatchAllFilter>();
+
     // Log summary
     logger::info("FilterRegistry: initialized {} filters ({} roots, {} families with children)",
         m_filters.size(), m_familyRoots.size(), m_children.size());
@@ -450,6 +478,17 @@ std::unordered_set<std::string> FilterRegistry::DefaultWhooshFilters() {
         }
     }
     return result;
+}
+
+std::vector<std::string> FilterRegistry::GetAllTraitStrings() const {
+    std::unordered_set<std::string> unique;
+    for (const auto& [id, filter] : m_filters) {
+        auto* iniFilter = dynamic_cast<INIFilter*>(filter.get());
+        if (iniFilter) {
+            iniFilter->CollectTraits(unique);
+        }
+    }
+    return {unique.begin(), unique.end()};
 }
 
 void FilterRegistry::DumpToLog() const {

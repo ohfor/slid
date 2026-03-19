@@ -23,18 +23,22 @@ namespace ContainerScanner {
 
         auto playerPos = player->GetPosition();
 
-        cell->ForEachReferenceInRange(playerPos, 100000.0f, [&](RE::TESObjectREFR& a_ref) -> RE::BSContainer::ForEachResult {
+        cell->ForEachReferenceInRange(playerPos, 100000.0f, [&](RE::TESObjectREFR* a_ref) -> RE::BSContainer::ForEachResult {
+            if (!a_ref) {
+                return RE::BSContainer::ForEachResult::kContinue;
+            }
+
             // Skip disabled/deleted
-            if (a_ref.IsDisabled() || a_ref.IsDeleted()) {
+            if (a_ref->IsDisabled() || a_ref->IsDeleted()) {
                 return RE::BSContainer::ForEachResult::kContinue;
             }
 
             // Must have container data
-            if (!a_ref.GetContainer()) {
+            if (!a_ref->GetContainer()) {
                 return RE::BSContainer::ForEachResult::kContinue;
             }
 
-            auto formID = a_ref.GetFormID();
+            auto formID = a_ref->GetFormID();
 
             // Skip the excluded container (typically the master)
             if (formID == a_excludeFormID) {
@@ -44,7 +48,7 @@ namespace ContainerScanner {
             // Safety heuristic: non-respawning containers are safe
             // Player-owned containers are safe
             // We include both for now; the picker shows all qualifying containers
-            auto* base = a_ref.GetBaseObject();
+            auto* base = a_ref->GetBaseObject();
             if (!base) {
                 return RE::BSContainer::ForEachResult::kContinue;
             }
@@ -58,7 +62,7 @@ namespace ContainerScanner {
             bool respawns = cont->data.flags.any(RE::CONT_DATA::Flag::kRespawn);
 
             // Check ownership
-            auto* owner = a_ref.GetOwner();
+            auto* owner = a_ref->GetOwner();
             bool playerOwned = false;
             if (owner) {
                 if (owner->GetFormID() == 0x14) {

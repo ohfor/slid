@@ -43,22 +43,21 @@ namespace Distributor {
     // Returns number of items moved. Returns 0 if not configured (caller shows popup).
     uint32_t Whoosh(const std::string& a_networkName);
 
-    // Predicted counts per filter slot and catch-all after a hypothetical Sort
+    // Predicted counts per filter slot after a hypothetical Sort.
+    // Catch-all is the last entry in filterCounts (it's a regular filter stage).
     struct PredictionResult {
-        std::vector<int> filterCounts;  // one per filter, same order as input
+        std::vector<int> filterCounts;  // one per filter, same order as input (including catch-all at end)
         std::vector<int> contestedCounts;  // contested items per filter (matched but claimed by higher-priority)
         std::vector<std::unordered_map<size_t, int32_t>> contestedByMaps;  // per filter: earlier_index → stolen count
-        int catchAllCount = 0;          // items not matching any filter
-        int originCount = 0;            // items staying in master (when catch-all IS master)
     };
 
     // Dry-run distribution: compute where items WOULD go without moving anything.
     // Pools all items from master + all linked filter/catch-all containers,
     // runs the pipeline, returns predicted counts per slot.
+    // a_filters must include the catch-all stage as the last entry.
     PredictionResult PredictDistribution(
         RE::FormID a_masterFormID,
-        const std::vector<FilterStage>& a_filters,
-        RE::FormID a_catchAllFormID);
+        const std::vector<FilterStage>& a_filters);
 
     // --- Pipeline types ---
 
@@ -74,9 +73,7 @@ namespace Distributor {
     };
 
     struct PipelineResult {
-        std::vector<FilterOutcome> filterOutcomes;  // one per filter, pipeline order
-        int32_t catchAllCount = 0;
-        int32_t originCount = 0;
+        std::vector<FilterOutcome> filterOutcomes;  // one per filter, pipeline order (including catch-all)
 
         struct RouteEntry {
             RE::TESBoundObject* item;
@@ -87,11 +84,11 @@ namespace Distributor {
     };
 
     // Run the filter pipeline over a pool of items.
+    // a_filters must include catch-all as the last entry.
     // a_resolveRefs: true = populate routes with container refs (for Distribute),
     //                false = counts only (for PredictDistribution).
     PipelineResult RunPipeline(
         const std::vector<FilterStage>& a_filters,
-        RE::FormID a_catchAllFormID,
         RE::FormID a_masterFormID,
         const std::vector<PoolItem>& a_pool,
         bool a_resolveRefs);

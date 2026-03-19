@@ -12,6 +12,12 @@ class FilterRegistry {
 public:
     static FilterRegistry* GetSingleton();
 
+    /// Constant filter ID for the synthetic catch-all filter.
+    static constexpr const char* kCatchAllFilterID = "__catchall";
+
+    /// Returns true if the given filter ID is the catch-all sentinel.
+    static bool IsCatchAll(const std::string& a_id) { return a_id == kCatchAllFilterID; }
+
     /// Create all filter instances and build family index. Call once from kDataLoaded.
     void Init();
 
@@ -32,6 +38,10 @@ public:
 
     /// Default Whoosh filter set: all IDs except those with DefaultExclude = true in INI.
     static std::unordered_set<std::string> DefaultWhooshFilters();
+
+    /// Collect all unique trait strings from loaded filters (require, exclude, requireAny).
+    /// Used by diagnostics to validate keyword references.
+    std::vector<std::string> GetAllTraitStrings() const;
 
     /// Debug: log all registered filters to SKSE log.
     void DumpToLog() const;

@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.21)
 # ---- Versioning ----
 set(VERSION_MAJOR 1)
 set(VERSION_MINOR 4)
-set(VERSION_PATCH 6)
+set(VERSION_PATCH 7)
 
 # ---- Project ----
 project(
@@ -50,8 +50,7 @@ set(ENABLE_XBYAK ON CACHE BOOL "" FORCE)
 FetchContent_Declare(
     CommonLibSSE
     GIT_REPOSITORY https://github.com/CharmedBaryon/CommonLibSSE-NG.git
-    GIT_TAG v3.7.0
-    GIT_SHALLOW TRUE
+    GIT_TAG b93280e832f263dbef44e44cbe2936622a02f91a
 )
 FetchContent_MakeAvailable(CommonLibSSE)
 
@@ -107,6 +106,8 @@ set(SOURCES
     src/ButtonBar.cpp
     src/MouseGlow.cpp
     src/DisplayName.cpp
+    src/Lifecycle.cpp
+    src/Diagnostics.cpp
 )
 
 set(HEADERS
@@ -158,6 +159,8 @@ set(HEADERS
     include/ButtonBar.h
     include/MouseGlow.h
     include/DisplayName.h
+    include/Lifecycle.h
+    include/Diagnostics.h
 )
 
 # ---- Create DLL ----

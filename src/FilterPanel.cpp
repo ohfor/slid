@@ -61,8 +61,6 @@ namespace FilterPanel {
     static int s_hoverIndex = -1;                     // display row index
     static int s_hoverChestIndex = -1;                // display row index
 
-    static int s_predictedOriginCount = -1;
-
     // Contest data — per flat pipeline index
     static std::vector<std::unordered_map<size_t, int32_t>> s_contestedByMaps;
     // Mapping from flat pipeline index → display row index (rebuilt in BuildDisplayRows)
@@ -118,7 +116,6 @@ namespace FilterPanel {
     static void UpdateScrollbar();
     // (BuildStagesFromNetwork is in orchestrator)
     static void BuildDefaultFilters();
-    static void UpdateOriginRow();
     static FilterRow::DropdownContext MakeDropdownContext();
     static void BeginAddFilter();
     static FilterRow::DropdownContext HandleSetupRefresh(int a_familyIndex);
@@ -473,12 +470,10 @@ namespace FilterPanel {
         s_deferredRecalc = true;
     }
 
-    bool Update() {
-        bool predictionsRecalculated = false;
+    void Update() {
         if (s_deferredRecalc) {
             s_deferredRecalc = false;
             s_callbacks.recalcPredictions();
-            predictionsRecalculated = true;
         }
         UpdateCountFlash();
         UpdateRowAnimations();
@@ -498,7 +493,6 @@ namespace FilterPanel {
             }
         }
         HoldRemove::Update();
-        return predictionsRecalculated;
     }
 
     // --- Public API: Save/Restore ---
@@ -578,8 +572,6 @@ namespace FilterPanel {
         s_savedFocusTarget = a_focusTarget;
         s_savedActionIndex = a_actionIndex;
     }
-    int GetPredictedOriginCount() { return s_predictedOriginCount; }
-    void SetPredictedOriginCount(int a_count) { s_predictedOriginCount = a_count; }
     int GetCurrentOriginCount() {
         return ContainerRegistry::GetSingleton()->CountItems(ConfigState::GetMasterFormID());
     }
@@ -870,8 +862,10 @@ namespace FilterPanel {
     }
 
     void CommitToNetwork() {
+        auto stages = BuildFilterStages();
         RE::FormID catchAllFormID = s_callbacks.getCatchAllFormID ? s_callbacks.getCatchAllFormID() : 0;
-        ConfigState::CommitToNetwork(ConfigState::GetNetworkName(), BuildFilterStages(), catchAllFormID);
+        stages.push_back(FilterStage{FilterRegistry::kCatchAllFilterID, catchAllFormID});
+        ConfigState::CommitToNetwork(ConfigState::GetNetworkName(), stages);
     }
 
     void LoadStages(std::vector<FilterRow::Data> a_stages) {
@@ -962,8 +956,7 @@ namespace FilterPanel {
 
     void SetPredictions(const std::vector<int>& a_filterCounts,
                         const std::vector<int>& a_contestedCounts,
-                        const std::vector<std::unordered_map<size_t, int32_t>>& a_contestedByMaps,
-                        int a_originCount) {
+                        const std::vector<std::unordered_map<size_t, int32_t>>& a_contestedByMaps) {
         // a_filterCounts is indexed by the flat pipeline order (same order as
         // BuildFilterStages output: children-before-root per family).
         // ToFilterStages emits ALL stages including unlinked, so flatIdx must
@@ -1016,10 +1009,7 @@ namespace FilterPanel {
             ++flatIdx;
         }
 
-        s_predictedOriginCount = a_originCount;
-
         PopulateList();
-        UpdateOriginRow();
     }
 
     void RefreshAfterSort(const std::set<int>& a_flashIndices) {
@@ -1061,14 +1051,9 @@ namespace FilterPanel {
                 child.contestColor = 0;
             }
         }
-        s_predictedOriginCount = -1;
         s_contestedByMaps.clear();
         s_contestAccentSet.clear();
         s_contestAnims.clear();
-    }
-
-    static void UpdateOriginRow() {
-        // Origin count data is used by orchestrator to update OriginPanel
     }
 
     // --- Internal: Row management ---

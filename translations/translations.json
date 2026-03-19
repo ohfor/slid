@@ -372,7 +372,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "This container is temporary and cannot be used with SLID",
     "$SLID_NetworkInactive": " (unavailable)",
-    "$SLID_NetworkInactiveDesc": "The master container for this Link could not be found. The mod it belongs to may have been removed. Destroy this Link if you no longer need it."
+    "$SLID_NetworkInactiveDesc": "The master container for this Link could not be found. The mod it belongs to may have been removed. Destroy this Link if you no longer need it.",
+    "$SLID_SortCompleteCount": "Sort complete ({0} items)",
+    "$SLID_SweepCompleteCount": "Sweep complete ({0} items)",
+    "$SLID_PresetConflict": "Preset '{0}' uses the same Master as your '{1}' link. Replace your current link?",
+    "$SLID_VendorBuys": "Buys:",
+    "$SLID_VendorInvestedRate": "Invested: +{0}%",
+    "$SLID_VendorLastVisit": "Last visit:"
   },
   "FRENCH": {
     "$SLID_PageSettings": "Paramètres",
@@ -747,7 +753,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "Ce conteneur est temporaire et ne peut pas être utilisé avec SLID",
     "$SLID_NetworkInactive": " (indisponible)",
-    "$SLID_NetworkInactiveDesc": "Le conteneur principal de ce Lien est introuvable. Le mod auquel il appartient a peut-être été supprimé. Détruisez ce Lien si vous n'en avez plus besoin."
+    "$SLID_NetworkInactiveDesc": "Le conteneur principal de ce Lien est introuvable. Le mod auquel il appartient a peut-être été supprimé. Détruisez ce Lien si vous n'en avez plus besoin.",
+    "$SLID_SortCompleteCount": "Tri terminé ({0} objets)",
+    "$SLID_SweepCompleteCount": "Rassemblement terminé ({0} objets)",
+    "$SLID_PresetConflict": "Le préréglage '{0}' utilise le même Maître que votre lien '{1}'. Remplacer votre lien actuel ?",
+    "$SLID_VendorBuys": "Achète :",
+    "$SLID_VendorInvestedRate": "Investi : +{0}%",
+    "$SLID_VendorLastVisit": "Dernière visite :"
   },
   "GERMAN": {
     "$SLID_PageSettings": "Einstellungen",
@@ -1122,7 +1134,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "Dieser Behälter ist temporär und kann nicht mit SLID verwendet werden",
     "$SLID_NetworkInactive": " (nicht verfügbar)",
-    "$SLID_NetworkInactiveDesc": "Der Hauptbehälter dieses Links konnte nicht gefunden werden. Der zugehörige Mod wurde möglicherweise entfernt. Zerstören Sie diesen Link, wenn Sie ihn nicht mehr benötigen."
+    "$SLID_NetworkInactiveDesc": "Der Hauptbehälter dieses Links konnte nicht gefunden werden. Der zugehörige Mod wurde möglicherweise entfernt. Zerstören Sie diesen Link, wenn Sie ihn nicht mehr benötigen.",
+    "$SLID_SortCompleteCount": "Sortierung abgeschlossen ({0} Gegenstände)",
+    "$SLID_SweepCompleteCount": "Sammlung abgeschlossen ({0} Gegenstände)",
+    "$SLID_PresetConflict": "Vorlage '{0}' verwendet denselben Master wie Ihre Verbindung '{1}'. Aktuelle Verbindung ersetzen?",
+    "$SLID_VendorBuys": "Kauft:",
+    "$SLID_VendorInvestedRate": "Investiert: +{0}%",
+    "$SLID_VendorLastVisit": "Letzter Besuch:"
   },
   "ITALIAN": {
     "$SLID_PageSettings": "Impostazioni",
@@ -1497,7 +1515,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "Questo contenitore è temporaneo e non può essere usato con SLID",
     "$SLID_NetworkInactive": " (non disponibile)",
-    "$SLID_NetworkInactiveDesc": "Il contenitore principale di questo Link non è stato trovato. Il mod a cui appartiene potrebbe essere stato rimosso. Distruggi questo Link se non ne hai più bisogno."
+    "$SLID_NetworkInactiveDesc": "Il contenitore principale di questo Link non è stato trovato. Il mod a cui appartiene potrebbe essere stato rimosso. Distruggi questo Link se non ne hai più bisogno.",
+    "$SLID_SortCompleteCount": "Ordinamento completato ({0} oggetti)",
+    "$SLID_SweepCompleteCount": "Raccolta completata ({0} oggetti)",
+    "$SLID_PresetConflict": "Il preset '{0}' usa lo stesso Master del tuo collegamento '{1}'. Sostituire il collegamento attuale?",
+    "$SLID_VendorBuys": "Compra:",
+    "$SLID_VendorInvestedRate": "Investito: +{0}%",
+    "$SLID_VendorLastVisit": "Ultima visita:"
   },
   "SPANISH": {
     "$SLID_PageSettings": "Ajustes",
@@ -1872,7 +1896,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "Este contenedor es temporal y no se puede usar con SLID",
     "$SLID_NetworkInactive": " (no disponible)",
-    "$SLID_NetworkInactiveDesc": "No se pudo encontrar el contenedor principal de este Enlace. Es posible que el mod al que pertenece haya sido eliminado. Destruye este Enlace si ya no lo necesitas."
+    "$SLID_NetworkInactiveDesc": "No se pudo encontrar el contenedor principal de este Enlace. Es posible que el mod al que pertenece haya sido eliminado. Destruye este Enlace si ya no lo necesitas.",
+    "$SLID_SortCompleteCount": "Ordenación completada ({0} objetos)",
+    "$SLID_SweepCompleteCount": "Recogida completada ({0} objetos)",
+    "$SLID_PresetConflict": "El preset '{0}' usa el mismo Maestro que tu enlace '{1}'. ¿Reemplazar tu enlace actual?",
+    "$SLID_VendorBuys": "Compra:",
+    "$SLID_VendorInvestedRate": "Invertido: +{0}%",
+    "$SLID_VendorLastVisit": "Última visita:"
   },
   "RUSSIAN": {
     "$SLID_PageSettings": "Настройки",
@@ -2247,7 +2277,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "Этот контейнер временный и не может использоваться с SLID",
     "$SLID_NetworkInactive": " (недоступно)",
-    "$SLID_NetworkInactiveDesc": "Главный контейнер этой Связи не найден. Возможно, мод, которому он принадлежит, был удалён. Уничтожьте эту Связь, если она вам больше не нужна."
+    "$SLID_NetworkInactiveDesc": "Главный контейнер этой Связи не найден. Возможно, мод, которому он принадлежит, был удалён. Уничтожьте эту Связь, если она вам больше не нужна.",
+    "$SLID_SortCompleteCount": "Сортировка завершена ({0} предметов)",
+    "$SLID_SweepCompleteCount": "Сбор завершён ({0} предметов)",
+    "$SLID_PresetConflict": "Пресет '{0}' использует тот же Мастер, что и ваша связь '{1}'. Заменить текущую связь?",
+    "$SLID_VendorBuys": "Покупает:",
+    "$SLID_VendorInvestedRate": "Инвестировано: +{0}%",
+    "$SLID_VendorLastVisit": "Последний визит:"
   },
   "POLISH": {
     "$SLID_PageSettings": "Ustawienia",
@@ -2622,7 +2658,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "Ten pojemnik jest tymczasowy i nie może być używany z SLID",
     "$SLID_NetworkInactive": " (niedostępne)",
-    "$SLID_NetworkInactiveDesc": "Nie można znaleźć głównego pojemnika tego Linku. Mod, do którego należy, mógł zostać usunięty. Zniszcz ten Link, jeśli nie jest już potrzebny."
+    "$SLID_NetworkInactiveDesc": "Nie można znaleźć głównego pojemnika tego Linku. Mod, do którego należy, mógł zostać usunięty. Zniszcz ten Link, jeśli nie jest już potrzebny.",
+    "$SLID_SortCompleteCount": "Sortowanie zakończone ({0} przedmiotów)",
+    "$SLID_SweepCompleteCount": "Zbieranie zakończone ({0} przedmiotów)",
+    "$SLID_PresetConflict": "Preset '{0}' używa tego samego Mistrza co twoje połączenie '{1}'. Zastąpić obecne połączenie?",
+    "$SLID_VendorBuys": "Kupuje:",
+    "$SLID_VendorInvestedRate": "Zainwestowano: +{0}%",
+    "$SLID_VendorLastVisit": "Ostatnia wizyta:"
   },
   "CZECH": {
     "$SLID_PageSettings": "Nastavení",
@@ -2997,7 +3039,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "Tento kontejner je dočasný a nelze jej použít se SLID",
     "$SLID_NetworkInactive": " (nedostupné)",
-    "$SLID_NetworkInactiveDesc": "Hlavní kontejner tohoto Linku nebyl nalezen. Mod, ke kterému patří, mohl být odstraněn. Zničte tento Link, pokud jej již nepotřebujete."
+    "$SLID_NetworkInactiveDesc": "Hlavní kontejner tohoto Linku nebyl nalezen. Mod, ke kterému patří, mohl být odstraněn. Zničte tento Link, pokud jej již nepotřebujete.",
+    "$SLID_SortCompleteCount": "Třídění dokončeno ({0} předmětů)",
+    "$SLID_SweepCompleteCount": "Sběr dokončen ({0} předmětů)",
+    "$SLID_PresetConflict": "Předvolba '{0}' používá stejného Mistra jako vaše propojení '{1}'. Nahradit vaše současné propojení?",
+    "$SLID_VendorBuys": "Kupuje:",
+    "$SLID_VendorInvestedRate": "Investováno: +{0}%",
+    "$SLID_VendorLastVisit": "Poslední návštěva:"
   },
   "TURKISH": {
     "$SLID_PageSettings": "Ayarlar",
@@ -3372,7 +3420,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "Bu kap geçicidir ve SLID ile kullanılamaz",
     "$SLID_NetworkInactive": " (kullanılamıyor)",
-    "$SLID_NetworkInactiveDesc": "Bu Bağlantının ana kabı bulunamadı. Ait olduğu mod kaldırılmış olabilir. Artık ihtiyacınız yoksa bu Bağlantıyı yok edin."
+    "$SLID_NetworkInactiveDesc": "Bu Bağlantının ana kabı bulunamadı. Ait olduğu mod kaldırılmış olabilir. Artık ihtiyacınız yoksa bu Bağlantıyı yok edin.",
+    "$SLID_SortCompleteCount": "Sıralama tamamlandı ({0} eşya)",
+    "$SLID_SweepCompleteCount": "Toplama tamamlandı ({0} eşya)",
+    "$SLID_PresetConflict": "'{0}' ön ayarı, '{1}' bağlantınızla aynı Ana Sandığı kullanıyor. Mevcut bağlantınız değiştirilsin mi?",
+    "$SLID_VendorBuys": "Satın alır:",
+    "$SLID_VendorInvestedRate": "Yatırım: +{0}%",
+    "$SLID_VendorLastVisit": "Son ziyaret:"
   },
   "JAPANESE": {
     "$SLID_PageSettings": "設定",
@@ -3747,7 +3801,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "このコンテナは一時的なもので、SLIDでは使用できません",
     "$SLID_NetworkInactive": " (利用不可)",
-    "$SLID_NetworkInactiveDesc": "このリンクのマスターコンテナが見つかりませんでした。所属するModが削除された可能性があります。不要であればこのリンクを破棄してください。"
+    "$SLID_NetworkInactiveDesc": "このリンクのマスターコンテナが見つかりませんでした。所属するModが削除された可能性があります。不要であればこのリンクを破棄してください。",
+    "$SLID_SortCompleteCount": "分類完了（{0}個のアイテム）",
+    "$SLID_SweepCompleteCount": "回収完了（{0}個のアイテム）",
+    "$SLID_PresetConflict": "プリセット「{0}」は「{1}」リンクと同じマスターを使用しています。現在のリンクを置き換えますか？",
+    "$SLID_VendorBuys": "買取：",
+    "$SLID_VendorInvestedRate": "投資済み：+{0}%",
+    "$SLID_VendorLastVisit": "最終訪問："
   },
   "KOREAN": {
     "$SLID_PageSettings": "설정",
@@ -4122,7 +4182,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "이 컨테이너는 임시이며 SLID에서 사용할 수 없습니다",
     "$SLID_NetworkInactive": " (사용 불가)",
-    "$SLID_NetworkInactiveDesc": "이 링크의 마스터 컨테이너를 찾을 수 없습니다. 해당 모드가 제거되었을 수 있습니다. 더 이상 필요하지 않다면 이 링크를 파괴하세요."
+    "$SLID_NetworkInactiveDesc": "이 링크의 마스터 컨테이너를 찾을 수 없습니다. 해당 모드가 제거되었을 수 있습니다. 더 이상 필요하지 않다면 이 링크를 파괴하세요.",
+    "$SLID_SortCompleteCount": "정렬 완료 ({0}개 아이템)",
+    "$SLID_SweepCompleteCount": "수집 완료 ({0}개 아이템)",
+    "$SLID_PresetConflict": "프리셋 '{0}'이(가) '{1}' 링크와 같은 마스터를 사용합니다. 현재 링크를 교체하시겠습니까?",
+    "$SLID_VendorBuys": "구매:",
+    "$SLID_VendorInvestedRate": "투자됨: +{0}%",
+    "$SLID_VendorLastVisit": "최근 방문:"
   },
   "SCHINESE": {
     "$SLID_PageSettings": "设置",
@@ -4497,7 +4563,13 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "此容器是临时的，无法与SLID一起使用",
     "$SLID_NetworkInactive": " (不可用)",
-    "$SLID_NetworkInactiveDesc": "找不到此链接的主容器。其所属的模组可能已被移除。如不再需要，请销毁此链接。"
+    "$SLID_NetworkInactiveDesc": "找不到此链接的主容器。其所属的模组可能已被移除。如不再需要，请销毁此链接。",
+    "$SLID_SortCompleteCount": "整理完成（{0}件物品）",
+    "$SLID_SweepCompleteCount": "收集完成（{0}件物品）",
+    "$SLID_PresetConflict": "预设「{0}」使用与您的链接「{1}」相同的主容器。替换当前链接？",
+    "$SLID_VendorBuys": "收购：",
+    "$SLID_VendorInvestedRate": "已投资：+{0}%",
+    "$SLID_VendorLastVisit": "上次访问："
   },
   "TCHINESE": {
     "$SLID_PageSettings": "設定",
@@ -4872,6 +4944,12 @@
     "$SLID_FontTestTitle": "Localisation Support",
     "$SLID_NonPersistentWarning": "此容器是暫時的，無法與SLID一起使用",
     "$SLID_NetworkInactive": " (不可用)",
-    "$SLID_NetworkInactiveDesc": "找不到此連結的主容器。其所屬的模組可能已被移除。如不再需要，請銷毀此連結。"
+    "$SLID_NetworkInactiveDesc": "找不到此連結的主容器。其所屬的模組可能已被移除。如不再需要，請銷毀此連結。",
+    "$SLID_SortCompleteCount": "整理完成（{0}件物品）",
+    "$SLID_SweepCompleteCount": "收集完成（{0}件物品）",
+    "$SLID_PresetConflict": "預設「{0}」使用與您的連結「{1}」相同的主容器。替換當前連結？",
+    "$SLID_VendorBuys": "收購：",
+    "$SLID_VendorInvestedRate": "已投資：+{0}%",
+    "$SLID_VendorLastVisit": "上次訪問："
   }
 }

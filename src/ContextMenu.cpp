@@ -701,16 +701,17 @@ namespace ContextMenu {
         }
 
         // 3. Catch-all if non-zero and not already present
-        if (net->catchAllFormID != 0 && !seen.count(net->catchAllFormID)) {
+        auto catchAllFormID = ExtractCatchAllFormID(net->filters);
+        if (catchAllFormID != 0 && !seen.count(catchAllFormID)) {
             SubMenuEntry entry;
-            entry.formID = net->catchAllFormID;
+            entry.formID = catchAllFormID;
             entry.isMaster = false;
 
-            auto tagName = mgr->GetTagName(net->catchAllFormID);
+            auto tagName = mgr->GetTagName(catchAllFormID);
             if (!tagName.empty()) {
                 entry.name = tagName;
             } else {
-                auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(net->catchAllFormID);
+                auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(catchAllFormID);
                 if (ref) {
                     auto* base = ref->GetBaseObject();
                     if (base) entry.name = base->GetName();

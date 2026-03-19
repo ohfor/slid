@@ -22,6 +22,8 @@
 #include "ContainerRegistry.h"
 #include "ContainerRegistryTest.h"
 #include "DisplayName.h"
+#include "Lifecycle.h"
+#include "Diagnostics.h"
 
 // Container source registration functions (defined in source files)
 void RegisterSpecialContainerSource();
@@ -31,8 +33,6 @@ void RegisterTaggedContainerSource();
 void RegisterSCIEContainerSource();
 void RegisterContainerListSource();
 void RegisterCellScanContainerSource();
-
-#include <ShlObj.h>  // SHGetKnownFolderPath — needed because SKSE::log::log_directory() is broken (see reference override)
 
 // Plugin version info for SKSE
 extern "C" __declspec(dllexport) constinit auto SKSEPlugin_Version = []() {
@@ -46,61 +46,11 @@ extern "C" __declspec(dllexport) constinit auto SKSEPlugin_Version = []() {
 }();
 
 namespace {
-    // Deferred initialization flags.
-    // kNewGame and kPostLoadGame fire before world-space persistent references
-    // are available via LookupByID — AddSpell, DisplayName, and ValidateNetworks
-    // all need REFRs that aren't in the form table until the first cell loads.
-    // We set flags and wait for the first TESCellFullyLoadedEvent.
-    static std::atomic<bool> g_pendingNewGameInit{false};
-    static std::atomic<bool> g_pendingLoadGameInit{false};
-    /// Get the SKSE log directory by deriving the game folder name from the DLL's own path.
-    /// SKSE::log::log_directory() uses a relocation that resolves to "Skyrim.INI" instead of
-    /// the game folder name, so we derive it from the DLL location instead.
-    std::optional<std::filesystem::path> GetLogDirectory() {
-        HMODULE hModule = nullptr;
-        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                                reinterpret_cast<LPCWSTR>(&GetLogDirectory), &hModule)) {
-            return std::nullopt;
-        }
-
-        wchar_t dllPath[MAX_PATH];
-        if (GetModuleFileNameW(hModule, dllPath, MAX_PATH) == 0) {
-            return std::nullopt;
-        }
-
-        // DLL path: {GameRoot}\Data\SKSE\Plugins\SLID.dll
-        // Navigate up 4 levels to get game root, then extract folder name
-        std::filesystem::path dllLocation = dllPath;
-        auto gameRoot = dllLocation.parent_path()  // Plugins
-                                   .parent_path()  // SKSE
-                                   .parent_path()  // Data
-                                   .parent_path(); // GameRoot (e.g., "Skyrim Special Edition")
-
-        auto gameFolderName = gameRoot.filename();
-
-        // Get Documents folder
-        wchar_t* docPath = nullptr;
-        if (!SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docPath))) {
-            return std::nullopt;
-        }
-
-        std::filesystem::path result = docPath;
-        CoTaskMemFree(docPath);
-
-        // Build: Documents\My Games\{GameFolderName}\SKSE
-        result /= "My Games";
-        result /= gameFolderName;
-        result /= "SKSE";
-        return result;
-    }
-
     void InitializeLogging() {
-        auto logDir = GetLogDirectory();
+        auto logDir = SKSE::log::log_directory();
         if (!logDir) {
-            SKSE::stl::report_and_fail("Could not determine log directory");
+            SKSE::stl::report_and_fail("SKSE log_directory not provided, logs disabled.");
         }
-
-        std::filesystem::create_directories(*logDir);
 
         auto path = *logDir / fmt::format(FMT_STRING("{}.log"), Version::NAME);
 
@@ -194,44 +144,7 @@ namespace {
         }
     }
 
-    // Run all new-game initialization that requires the player to be in-world
-    void NewGameInit() {
-        logger::info("NewGameInit: player is in-world, running deferred initialization");
-        NetworkManager::GetSingleton()->LoadConfigFromINI();
-        DisplayName::ApplyAll();
-        ResetVendorGlobals();
-        GrantPowers();
-        if (auto* quest = RE::TESForm::LookupByEditorID<RE::TESQuest>("SLID_VendorQuest")) {
-            if (!quest->IsRunning()) {
-                quest->Start();
-                logger::info("VendorQuest: started for new game (running={})", quest->IsRunning());
-            }
-        }
-    }
-
-    // Run post-load validation that requires persistent REFRs to be in the form table.
-    // Deferred from kPostLoadGame because LookupByID returns null for world-space
-    // persistent refs until the first cell loads.
-    void LoadGameInit() {
-        logger::info("LoadGameInit: first cell loaded, running deferred validation");
-        auto result = NetworkManager::GetSingleton()->ValidateNetworks();
-        auto vendorsPruned = VendorRegistry::GetSingleton()->Validate();
-        if (result.prunedNetworks > 0 || result.prunedTags > 0 || result.prunedFilters > 0 || result.prunedSell || vendorsPruned > 0) {
-            std::string msg = "SLID: Pruned " +
-                std::to_string(result.prunedNetworks) + " networks, " +
-                std::to_string(result.prunedTags) + " tags, " +
-                std::to_string(result.prunedFilters) + " filters" +
-                (result.prunedSell ? ", sell container" : "") +
-                (vendorsPruned > 0 ? ", " + std::to_string(vendorsPruned) + " vendors" : "") +
-                " (missing mods?)";
-            RE::DebugNotification(msg.c_str());
-            logger::warn("{}", msg);
-        }
-        // Set display names on all SLID containers (master, sell, tagged)
-        DisplayName::ApplyAll();
-    }
-
-    // One-shot event sink: waits for first cell load after kNewGame, then runs init
+    // Event sink: on first cell load after kGameLoading, transitions to kWorldReady
     class CellLoadedHandler : public RE::BSTEventSink<RE::TESCellFullyLoadedEvent> {
     public:
         static CellLoadedHandler* GetSingleton() {
@@ -243,11 +156,8 @@ namespace {
             const RE::TESCellFullyLoadedEvent*,
             RE::BSTEventSource<RE::TESCellFullyLoadedEvent>*) override
         {
-            if (g_pendingNewGameInit.exchange(false)) {
-                NewGameInit();
-            }
-            if (g_pendingLoadGameInit.exchange(false)) {
-                LoadGameInit();
+            if (Lifecycle::GetState() == Lifecycle::State::kGameLoading) {
+                Lifecycle::TransitionTo(Lifecycle::State::kWorldReady);
             }
             return RE::BSEventNotifyControl::kContinue;
         }
@@ -259,6 +169,7 @@ namespace {
     void MessageHandler(SKSE::MessagingInterface::Message* a_msg) {
         switch (a_msg->type) {
             case SKSE::MessagingInterface::kDataLoaded:
+                Lifecycle::TransitionTo(Lifecycle::State::kDataLoaded);
                 logger::info("Data loaded, initializing...");
                 TranslationService::GetSingleton()->Load();
                 Settings::LoadUniqueItems();
@@ -308,6 +219,7 @@ namespace {
                 break;
 
             case SKSE::MessagingInterface::kPostLoadGame: {
+                Lifecycle::TransitionTo(Lifecycle::State::kGameLoading);
                 logger::info("Game loaded — deferring REFR validation to first cell load");
                 WelcomeMenu::ResetSession();
                 SummonChest::Clear();
@@ -327,22 +239,61 @@ namespace {
                     });
                 }
                 GrantPowers();
-                // Defer ValidateNetworks + DisplayName::ApplyAll to first cell load.
-                // LookupByID returns null for world-space persistent REFRs at kPostLoadGame —
-                // they aren't in the form table until the engine loads the first cell.
-                g_pendingLoadGameInit = true;
+                // Defer REFR-dependent work to first cell load
+                Lifecycle::DeferUntilWorldReady([]() {
+                    auto result = NetworkManager::GetSingleton()->ValidateNetworks();
+                    auto vendorsPruned = VendorRegistry::GetSingleton()->Validate();
+                    if (result.prunedNetworks > 0 || result.prunedTags > 0 || result.prunedFilters > 0 || result.prunedSell || vendorsPruned > 0) {
+                        std::string msg = "SLID: Pruned " +
+                            std::to_string(result.prunedNetworks) + " networks, " +
+                            std::to_string(result.prunedTags) + " tags, " +
+                            std::to_string(result.prunedFilters) + " filters" +
+                            (result.prunedSell ? ", sell container" : "") +
+                            (vendorsPruned > 0 ? ", " + std::to_string(vendorsPruned) + " vendors" : "") +
+                            " (missing mods?)";
+                        RE::DebugNotification(msg.c_str());
+                        logger::warn("{}", msg);
+                    }
+                    DisplayName::ApplyAll();
+                    Diagnostics::ValidateState();
+                }, "LoadGameInit");
+                // Cell events may have already fired during the loading screen
+                // before kPostLoadGame arrives. If the player is already in-world,
+                // transition immediately rather than waiting for the next cell load.
+                if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+                    if (player->GetParentCell()) {
+                        Lifecycle::TransitionTo(Lifecycle::State::kWorldReady);
+                    }
+                }
                 break;
             }
 
             case SKSE::MessagingInterface::kNewGame:
+                Lifecycle::TransitionTo(Lifecycle::State::kGameLoading);
                 logger::info("New game started — deferring init to first cell load");
                 WelcomeMenu::ResetSession();
                 SummonChest::Clear();
-                // Defer all player-dependent init (power grant, display names, presets)
-                // until the first TESCellFullyLoadedEvent, when the player is in-world.
-                // kNewGame fires before the world is loaded — AddSpell and similar
-                // operations are unreliable at this point.
-                g_pendingNewGameInit = true;
+                // Defer all player-dependent init to first cell load
+                Lifecycle::DeferUntilWorldReady([]() {
+                    NetworkManager::GetSingleton()->LoadConfigFromINI();
+                    DisplayName::ApplyAll();
+                    ResetVendorGlobals();
+                    GrantPowers();
+                    if (auto* quest = RE::TESForm::LookupByEditorID<RE::TESQuest>("SLID_VendorQuest")) {
+                        if (!quest->IsRunning()) {
+                            quest->Start();
+                            logger::info("VendorQuest: started for new game (running={})", quest->IsRunning());
+                        }
+                    }
+                    Diagnostics::ValidateState();
+                }, "NewGameInit");
+                // In case cells loaded before this message (unlikely for new game,
+                // but defensive), transition immediately.
+                if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+                    if (player->GetParentCell()) {
+                        Lifecycle::TransitionTo(Lifecycle::State::kWorldReady);
+                    }
+                }
                 break;
         }
     }

@@ -91,10 +91,10 @@ public:
     Network* FindNetwork(const std::string& a_name);
     const std::vector<Network>& GetNetworks() const;
 
-    // Filter pipeline management (from config menu)
+    // Filter pipeline management (from config menu).
+    // a_filters must include the catch-all stage as the last entry.
     void SetFilterConfig(const std::string& a_networkName,
-                         const std::vector<FilterStage>& a_filters,
-                         RE::FormID a_catchAllFormID);
+                         const std::vector<FilterStage>& a_filters);
 
     // Whoosh configuration
     void SetWhooshConfig(const std::string& a_networkName, const std::unordered_set<std::string>& a_filters);

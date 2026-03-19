@@ -1,5 +1,6 @@
 #include "NetworkManager.h"
 #include "DisplayName.h"
+#include "FilterRegistry.h"
 #include "Settings.h"
 
 #include <algorithm>
@@ -29,11 +30,12 @@ bool NetworkManager::CreateNetwork(const std::string& a_name, RE::FormID a_maste
     net.name = a_name;
     net.masterFormID = a_masterFormID;
     net.filters = BuildDefaultFilters();
-    net.catchAllFormID = 0;  // default = master
+    // Append catch-all as the last filter stage (default = Keep/master)
+    net.filters.push_back(FilterStage{FilterRegistry::kCatchAllFilterID, 0});
     m_networks.push_back(std::move(net));
 
     logger::debug("Created network '{}' with master {:08X} and {} default filters",
-                 a_name, a_masterFormID, net.filters.size());
+                 a_name, a_masterFormID, m_networks.back().filters.size());
     return true;
 }
 
@@ -94,8 +96,7 @@ const std::vector<Network>& NetworkManager::GetNetworks() const {
 }
 
 void NetworkManager::SetFilterConfig(const std::string& a_networkName,
-                                     const std::vector<FilterStage>& a_filters,
-                                     RE::FormID a_catchAllFormID) {
+                                     const std::vector<FilterStage>& a_filters) {
     std::lock_guard lock(m_lock);
 
     auto* net = FindNetworkUnsafe(a_networkName);
@@ -105,10 +106,9 @@ void NetworkManager::SetFilterConfig(const std::string& a_networkName,
     }
 
     net->filters = a_filters;
-    net->catchAllFormID = a_catchAllFormID;
 
-    logger::debug("SetFilterConfig: network '{}' updated with {} filters, catchAll={:08X}",
-                 a_networkName, a_filters.size(), a_catchAllFormID);
+    logger::debug("SetFilterConfig: network '{}' updated with {} filters (catchAll={:08X})",
+                 a_networkName, a_filters.size(), ExtractCatchAllFormID(a_filters));
 }
 
 void NetworkManager::SetWhooshConfig(const std::string& a_networkName, const std::unordered_set<std::string>& a_filters) {
@@ -215,11 +215,13 @@ void NetworkManager::ClearContainerReferences(RE::FormID a_formID) {
     for (auto& net : m_networks) {
         for (auto& filter : net.filters) {
             if (filter.containerFormID == a_formID) {
-                filter.containerFormID = 0;
+                // Catch-all falls back to Keep (master) instead of Pass
+                if (FilterRegistry::IsCatchAll(filter.filterID)) {
+                    filter.containerFormID = net.masterFormID;
+                } else {
+                    filter.containerFormID = 0;
+                }
             }
-        }
-        if (net.catchAllFormID == a_formID) {
-            net.catchAllFormID = 0;
         }
     }
 
@@ -367,19 +369,24 @@ void NetworkManager::Save(SKSE::SerializationInterface* a_intfc) const {
         // Master FormID
         a_intfc->WriteRecordData(&net.masterFormID, sizeof(net.masterFormID));
 
-        // Filters (v4: string ID + FormID)
-        uint32_t filterCount = static_cast<uint32_t>(net.filters.size());
+        // Filters (v4: string ID + FormID) — skip catch-all (written separately for compat)
+        uint32_t filterCount = 0;
+        for (const auto& f : net.filters) {
+            if (!FilterRegistry::IsCatchAll(f.filterID)) ++filterCount;
+        }
         a_intfc->WriteRecordData(&filterCount, sizeof(filterCount));
 
         for (const auto& filter : net.filters) {
+            if (FilterRegistry::IsCatchAll(filter.filterID)) continue;
             uint16_t idLen = static_cast<uint16_t>(filter.filterID.size());
             a_intfc->WriteRecordData(&idLen, sizeof(idLen));
             a_intfc->WriteRecordData(filter.filterID.data(), idLen);
             a_intfc->WriteRecordData(&filter.containerFormID, sizeof(filter.containerFormID));
         }
 
-        // Catch-all
-        a_intfc->WriteRecordData(&net.catchAllFormID, sizeof(net.catchAllFormID));
+        // Catch-all FormID (extracted from filters.back() for binary compat)
+        RE::FormID catchAllFormID = ExtractCatchAllFormID(net.filters);
+        a_intfc->WriteRecordData(&catchAllFormID, sizeof(catchAllFormID));
 
         // Whoosh config (v4: string set)
         // Sort for deterministic output
@@ -660,7 +667,7 @@ NetworkManager::ValidationResult NetworkManager::ValidateNetworks() {
             net.masterUnavailable = false;
         }
 
-        // Validate filter containerFormIDs — log but don't clear
+        // Validate filter containerFormIDs (including catch-all) — log but don't clear
         for (const auto& filter : net.filters) {
             if (filter.containerFormID != 0) {
                 auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(filter.containerFormID);
@@ -668,15 +675,6 @@ NetworkManager::ValidationResult NetworkManager::ValidateNetworks() {
                     logger::warn("Network '{}': filter '{}' container {:08X} not resolvable (cell may be unloaded), preserving assignment",
                                  net.name, filter.filterID, filter.containerFormID);
                 }
-            }
-        }
-
-        // Validate catch-all — log but don't clear
-        if (net.catchAllFormID != 0) {
-            auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(net.catchAllFormID);
-            if (!ref) {
-                logger::warn("Network '{}': catchAll {:08X} not resolvable (cell may be unloaded), preserving assignment",
-                             net.name, net.catchAllFormID);
             }
         }
     }
@@ -1252,7 +1250,7 @@ void NetworkManager::DumpToLog() const {
 
     for (const auto& net : m_networks) {
         logger::info("  Network '{}' (master: {:08X}, catchAll: {:08X})",
-                     net.name, net.masterFormID, net.catchAllFormID);
+                     net.name, net.masterFormID, ExtractCatchAllFormID(net.filters));
 
         for (size_t i = 0; i < net.filters.size(); ++i) {
             const auto& f = net.filters[i];
@@ -1411,7 +1409,7 @@ bool NetworkManager::ActivatePreset(const std::string& a_name) {
         filters.push_back(std::move(stage));
     }
 
-    // Resolve catch-all (Keep = 0 = master, same as default)
+    // Resolve catch-all and append as FilterStage (Keep = 0 = master, same as default)
     RE::FormID catchAllFormID = 0;
     if (!preset->catchAllRef.empty()) {
         std::string catchLower = preset->catchAllRef;
@@ -1421,8 +1419,9 @@ bool NetworkManager::ActivatePreset(const std::string& a_name) {
             catchAllFormID = ParseFormIDRef(preset->catchAllRef, dh);
         }
     }
+    filters.push_back(FilterStage{FilterRegistry::kCatchAllFilterID, catchAllFormID});
 
-    SetFilterConfig(a_name, filters, catchAllFormID);
+    SetFilterConfig(a_name, filters);
 
     // Tag containers
     uint32_t tagged = 0;
@@ -1598,15 +1597,17 @@ void NetworkManager::LoadNetworks(SKSE::SerializationInterface* a_intfc, uint32_
             net.filters.push_back(std::move(filter));
         }
 
-        // Catch-all
+        // Catch-all — read from separate field, append as FilterStage
         RE::FormID savedCatchAll = 0;
         a_intfc->ReadRecordData(&savedCatchAll, sizeof(savedCatchAll));
+        RE::FormID resolvedCatchAll = 0;
         if (savedCatchAll != 0) {
-            if (!a_intfc->ResolveFormID(savedCatchAll, net.catchAllFormID)) {
+            if (!a_intfc->ResolveFormID(savedCatchAll, resolvedCatchAll)) {
                 logger::warn("Network '{}': failed to resolve catchAll {:08X}", net.name, savedCatchAll);
-                net.catchAllFormID = 0;
+                resolvedCatchAll = 0;
             }
         }
+        net.filters.push_back(FilterStage{FilterRegistry::kCatchAllFilterID, resolvedCatchAll});
 
         // Whoosh config: string set + configured flag
         uint16_t whooshCount = 0;

@@ -420,11 +420,6 @@ namespace ConsoleCommands {
                         containers.insert(filter.containerFormID);
                     }
                 }
-                if (net.catchAllFormID != 0
-                    && masters.find(net.catchAllFormID) == masters.end()
-                    && net.catchAllFormID != sellFormID) {
-                    containers.insert(net.catchAllFormID);
-                }
             }
 
             // Remove sell container from masters/containers sets (it gets orange)
@@ -998,6 +993,12 @@ namespace ConsoleCommands {
             return T(a_key.c_str());
         }
 
+        RE::BSFixedString FormatTranslation(RE::StaticFunctionTag*,
+            RE::BSFixedString a_key, RE::BSFixedString a_arg0,
+            RE::BSFixedString a_arg1, RE::BSFixedString a_arg2) {
+            return TF(a_key.c_str(), a_arg0.c_str(), a_arg1.c_str(), a_arg2.c_str());
+        }
+
         RE::BSFixedString GetNetworkMasterName(RE::StaticFunctionTag*, RE::BSFixedString a_networkName) {
             auto* mgr = NetworkManager::GetSingleton();
             auto* network = mgr->FindNetwork(a_networkName.c_str());
@@ -1048,9 +1049,6 @@ namespace ConsoleCommands {
                     containers.insert(stage.containerFormID);
                 }
             }
-            if (network->catchAllFormID != 0) {
-                containers.insert(network->catchAllFormID);
-            }
             return static_cast<int32_t>(containers.size());
         }
 
@@ -1092,12 +1090,6 @@ namespace ConsoleCommands {
                 containers.emplace_back(stage.containerFormID, getDisplayName(stage.containerFormID));
             }
 
-            // Catch-all if unique
-            if (network->catchAllFormID != 0 && seen.insert(network->catchAllFormID).second) {
-                containers.emplace_back(network->catchAllFormID,
-                                        getDisplayName(network->catchAllFormID) + " (Catch-All)");
-            }
-
             for (const auto& c : containers) {
                 result.push_back(RE::BSFixedString(c.second.c_str()));
             }
@@ -1120,10 +1112,6 @@ namespace ConsoleCommands {
                 if (!seen.insert(stage.containerFormID).second) continue;
                 containers.push_back(stage.containerFormID);
             }
-            if (network->catchAllFormID != 0 && seen.insert(network->catchAllFormID).second) {
-                containers.push_back(network->catchAllFormID);
-            }
-
             if (a_index < 0 || a_index >= static_cast<int32_t>(containers.size())) return;
 
             RE::FormID targetFID = containers[a_index];
@@ -1195,8 +1183,8 @@ namespace ConsoleCommands {
             }
 
             std::vector<std::string> keywords;
-            buyList->ForEachForm([&](RE::TESForm& form) {
-                auto* kw = form.As<RE::BGSKeyword>();
+            buyList->ForEachForm([&](RE::TESForm* form) {
+                auto* kw = form->As<RE::BGSKeyword>();
                 if (kw) {
                     std::string name = kw->GetFormEditorID();
                     // Strip "VendorItem" prefix for readability
@@ -1569,10 +1557,6 @@ namespace ConsoleCommands {
                     ++assignedCount;
                 }
             }
-            if (network->catchAllFormID != 0) {
-                allFormIDs.insert(network->catchAllFormID);
-            }
-
             // Collect all unique non-base-game plugins referenced by network containers
             static const std::set<std::string, std::less<>> kBaseGamePlugins = {
                 "Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"
@@ -1650,6 +1634,7 @@ namespace ConsoleCommands {
             // --- [Preset:Name:Filters] ---
             out << "[Preset:" << presetName << ":Filters]\n";
             for (const auto& stage : network->filters) {
+                if (FilterRegistry::IsCatchAll(stage.filterID)) continue;  // written separately below
                 out << stage.filterID << " = ";
                 if (stage.containerFormID == network->masterFormID) {
                     out << "Keep";
@@ -1665,11 +1650,12 @@ namespace ConsoleCommands {
                 out << "\n";
             }
             // CatchAll line
-            if (network->catchAllFormID == 0 || network->catchAllFormID == network->masterFormID) {
+            auto catchAllFID = ExtractCatchAllFormID(network->filters);
+            if (catchAllFID == 0 || catchAllFID == network->masterFormID) {
                 out << "CatchAll = Keep\n";
             } else {
-                out << "CatchAll = " << FormatFormIDForExport(network->catchAllFormID);
-                auto comment = GetContainerDisplayName(mgr, network->catchAllFormID);
+                out << "CatchAll = " << FormatFormIDForExport(catchAllFID);
+                auto comment = GetContainerDisplayName(mgr, catchAllFID);
                 if (!comment.empty()) {
                     out << "  ; " << comment;
                 }
@@ -1686,10 +1672,6 @@ namespace ConsoleCommands {
                     networkContainers.insert(stage.containerFormID);
                 }
             }
-            if (network->catchAllFormID != 0) {
-                networkContainers.insert(network->catchAllFormID);
-            }
-
             // Write tags for network containers
             bool hasTagSection = false;
             // Master first
@@ -2391,6 +2373,7 @@ namespace ConsoleCommands {
         a_vm->RegisterFunction("GetNetworkNames"sv, className, GetNetworkNames);
         a_vm->RegisterFunction("IsNetworkActive"sv, className, IsNetworkActive);
         a_vm->RegisterFunction("GetTranslation"sv, className, GetTranslation);
+        a_vm->RegisterFunction("FormatTranslation"sv, className, FormatTranslation);
         a_vm->RegisterFunction("GetNetworkMasterName"sv, className, GetNetworkMasterName);
         a_vm->RegisterFunction("RunSort"sv, className, RunSort);
         a_vm->RegisterFunction("RunSweep"sv, className, RunSweep);

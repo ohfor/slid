@@ -1,6 +1,7 @@
 #include "TraitEvaluator.h"
 #include "Settings.h"
 #include "Distributor.h"
+#include "FilterRegistry.h"
 
 #include <functional>
 #include <unordered_map>
@@ -421,6 +422,39 @@ namespace TraitEvaluator {
             logger::warn("TraitEvaluator: unknown trait '{}'", traitName);
         }
         return false;
+    }
+
+    uint32_t ValidateKeywords() {
+        auto traits = FilterRegistry::GetSingleton()->GetAllTraitStrings();
+        uint32_t failures = 0;
+        constexpr std::string_view kPrefix = "keyword:";
+
+        for (const auto& trait : traits) {
+            if (trait.size() <= kPrefix.size() ||
+                trait.substr(0, kPrefix.size()) != kPrefix) {
+                continue;
+            }
+            auto editorID = trait.substr(kPrefix.size());
+
+            // Check cache first
+            auto it = s_keywordCache.find(editorID);
+            if (it != s_keywordCache.end()) {
+                if (!it->second) {
+                    logger::warn("SLID: keyword '{}' in filter trait resolved to null", editorID);
+                    ++failures;
+                }
+                continue;
+            }
+
+            // Try runtime lookup
+            auto* kw = RE::TESForm::LookupByEditorID<RE::BGSKeyword>(editorID);
+            s_keywordCache[editorID] = kw;
+            if (!kw) {
+                logger::warn("SLID: keyword '{}' in filter trait resolved to null", editorID);
+                ++failures;
+            }
+        }
+        return failures;
     }
 
 }  // namespace TraitEvaluator

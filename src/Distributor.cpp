@@ -128,12 +128,10 @@ namespace Distributor {
 
     struct EffectivePipeline {
         std::vector<FilterStage> filters;
-        RE::FormID catchAllFormID = 0;
     };
 
     static EffectivePipeline ResolveEffectivePipeline(
         const std::vector<FilterStage>& a_filters,
-        RE::FormID a_catchAllFormID,
         RE::FormID a_masterFormID) {
 
         auto* registry = ContainerRegistry::GetSingleton();
@@ -152,26 +150,19 @@ namespace Distributor {
                 if (display.available) {
                     effective.containerFormID = stage.containerFormID;
                 } else {
-                    logger::debug("ResolveEffectivePipeline: container {:08X} ({}) unavailable — treating as Pass",
-                                 stage.containerFormID, display.name);
-                    effective.containerFormID = 0;
+                    // Catch-all falls back to Keep (master) instead of Pass
+                    if (FilterRegistry::IsCatchAll(stage.filterID)) {
+                        logger::debug("ResolveEffectivePipeline: catch-all container {:08X} ({}) unavailable — treating as Keep",
+                                     stage.containerFormID, display.name);
+                        effective.containerFormID = a_masterFormID;
+                    } else {
+                        logger::debug("ResolveEffectivePipeline: container {:08X} ({}) unavailable — treating as Pass",
+                                     stage.containerFormID, display.name);
+                        effective.containerFormID = 0;
+                    }
                 }
             }
             result.filters.push_back(std::move(effective));
-        }
-
-        // Resolve catch-all
-        if (a_catchAllFormID != 0 && a_catchAllFormID != a_masterFormID) {
-            auto display = registry->Resolve(a_catchAllFormID);
-            if (display.available) {
-                result.catchAllFormID = a_catchAllFormID;
-            } else {
-                logger::debug("ResolveEffectivePipeline: catch-all {:08X} ({}) unavailable — treating as Keep",
-                             a_catchAllFormID, display.name);
-                result.catchAllFormID = 0;
-            }
-        } else {
-            result.catchAllFormID = a_catchAllFormID;
         }
 
         return result;
@@ -182,7 +173,6 @@ namespace Distributor {
 
     PipelineResult RunPipeline(
         const std::vector<FilterStage>& a_filters,
-        RE::FormID a_catchAllFormID,
         RE::FormID a_masterFormID,
         const std::vector<PoolItem>& a_pool,
         bool a_resolveRefs) {
@@ -191,20 +181,15 @@ namespace Distributor {
         result.filterOutcomes.resize(a_filters.size());
 
         auto* registry = FilterRegistry::GetSingleton();
-        bool hasCatchAll = (a_catchAllFormID != 0 && a_catchAllFormID != a_masterFormID);
 
         // Pre-resolve container refs if needed for route building
         std::vector<RE::TESObjectREFR*> filterRefs;
-        RE::TESObjectREFR* catchAllRef = nullptr;
         if (a_resolveRefs) {
             filterRefs.resize(a_filters.size(), nullptr);
             for (size_t i = 0; i < a_filters.size(); ++i) {
                 if (a_filters[i].containerFormID != 0 && a_filters[i].containerFormID != a_masterFormID) {
                     filterRefs[i] = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_filters[i].containerFormID);
                 }
-            }
-            if (hasCatchAll) {
-                catchAllRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(a_catchAllFormID);
             }
         }
 
@@ -235,22 +220,6 @@ namespace Distributor {
                     // Subsequent matching filters: contested
                     result.filterOutcomes[i].contestedCount += poolItem.count;
                     result.filterOutcomes[i].contestedBy[static_cast<size_t>(firstMatch)] += poolItem.count;
-                }
-            }
-
-            if (firstMatch == -1) {
-                // No filter claimed — catch-all or origin
-                if (hasCatchAll) {
-                    result.catchAllCount += poolItem.count;
-                    if (a_resolveRefs && catchAllRef) {
-                        result.routes.push_back({poolItem.item, poolItem.count, catchAllRef});
-                    }
-                } else {
-                    result.originCount += poolItem.count;
-                    logger::debug("  Unclaimed: {}x {} (FormID {:08X}, type {})",
-                                 poolItem.count, poolItem.item->GetName(),
-                                 poolItem.item->GetFormID(),
-                                 static_cast<int>(poolItem.item->GetFormType()));
                 }
             }
         }
@@ -308,9 +277,6 @@ namespace Distributor {
                 containers.insert(filter.containerFormID);
             }
         }
-        if (a_pipeline.catchAllFormID != 0 && a_pipeline.catchAllFormID != a_masterFormID) {
-            containers.insert(a_pipeline.catchAllFormID);
-        }
         return containers;
     }
 
@@ -328,7 +294,7 @@ namespace Distributor {
             return 0;
         }
 
-        auto effective = ResolveEffectivePipeline(net->filters, net->catchAllFormID, net->masterFormID);
+        auto effective = ResolveEffectivePipeline(net->filters, net->masterFormID);
         auto containers = CollectActiveContainers(effective, net->masterFormID);
         return GatherToMasterImpl(a_networkName, masterRef, containers);
     }
@@ -350,7 +316,7 @@ namespace Distributor {
         }
 
         // Resolve availability once — used by both gather and pipeline
-        auto effective = ResolveEffectivePipeline(net->filters, net->catchAllFormID, net->masterFormID);
+        auto effective = ResolveEffectivePipeline(net->filters, net->masterFormID);
 
         // Phase 1: Gather all items from effective containers to master
         auto containers = CollectActiveContainers(effective, net->masterFormID);
@@ -375,7 +341,7 @@ namespace Distributor {
                      pool.size(), net->masterFormID, masterInv.size());
 
         // Phase 3: Run pipeline (effective filters — unavailable containers already zeroed)
-        auto pipelineResult = RunPipeline(effective.filters, effective.catchAllFormID,
+        auto pipelineResult = RunPipeline(effective.filters,
                                           net->masterFormID, pool, true);
 
         // Phase 4: Execute routes
@@ -410,8 +376,7 @@ namespace Distributor {
 
     PredictionResult PredictDistribution(
         RE::FormID a_masterFormID,
-        const std::vector<FilterStage>& a_filters,
-        RE::FormID a_catchAllFormID) {
+        const std::vector<FilterStage>& a_filters) {
 
         PredictionResult result;
         result.filterCounts.resize(a_filters.size(), 0);
@@ -419,7 +384,7 @@ namespace Distributor {
         result.contestedByMaps.resize(a_filters.size());
 
         // Resolve availability once
-        auto effective = ResolveEffectivePipeline(a_filters, a_catchAllFormID, a_masterFormID);
+        auto effective = ResolveEffectivePipeline(a_filters, a_masterFormID);
 
         // Derive the set of all effective containers (master + available pipeline containers)
         std::set<RE::FormID> allContainers;
@@ -441,7 +406,7 @@ namespace Distributor {
 
         // Run pipeline (counts only, no ref resolution) — effective pipeline has
         // unavailable containers already zeroed to Pass
-        auto pipelineResult = RunPipeline(effective.filters, effective.catchAllFormID,
+        auto pipelineResult = RunPipeline(effective.filters,
                                           a_masterFormID, pool, false);
 
         // Map pipeline outcomes to prediction result
@@ -450,8 +415,6 @@ namespace Distributor {
             result.contestedCounts[i] = pipelineResult.filterOutcomes[i].contestedCount;
             result.contestedByMaps[i] = pipelineResult.filterOutcomes[i].contestedBy;
         }
-        result.catchAllCount = pipelineResult.catchAllCount;
-        result.originCount = pipelineResult.originCount;
 
         return result;
     }
@@ -639,9 +602,6 @@ namespace Distributor {
             if (stage.containerFormID != 0) {
                 containerIDs.insert(stage.containerFormID);
             }
-        }
-        if (net->catchAllFormID != 0) {
-            containerIDs.insert(net->catchAllFormID);
         }
         // Also include tagged containers
         for (const auto& [formID, tag] : mgr->GetTagRegistry()) {
@@ -910,8 +870,8 @@ namespace Distributor {
                     // BGSListForm contains keywords — check if item has any of them
                     auto* keyworded = item->As<RE::BGSKeywordForm>();
                     if (keyworded) {
-                        buyList->ForEachForm([&](RE::TESForm& a_form) {
-                            auto* keyword = a_form.As<RE::BGSKeyword>();
+                        buyList->ForEachForm([&](RE::TESForm* a_form) {
+                            auto* keyword = a_form->As<RE::BGSKeyword>();
                             if (keyword && keyworded->HasKeyword(keyword)) {
                                 matches = true;
                                 return RE::BSContainer::ForEachResult::kStop;

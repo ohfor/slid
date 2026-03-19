@@ -24,26 +24,17 @@ namespace ConfigState {
         int         count = 0;
     };
 
-    struct LoadedCatchAll {
-        std::string containerName;
-        std::string location;
-        RE::FormID  containerFormID = 0;
-        int         count = 0;
-    };
-
     struct LoadedNetwork {
-        std::vector<LoadedStage> stages;
-        LoadedCatchAll           catchAll;
+        std::vector<LoadedStage> stages;  // includes catch-all as last entry
         bool                     hasNetwork = false;
     };
 
-    // Build stage and catch-all data from the current network.
+    // Build stage data from the current network (catch-all is the last entry).
     LoadedNetwork BuildFromNetwork();
 
     // --- Commit ---
 
-    // Push in-memory filter stages and catch-all to NetworkManager.
+    // Push in-memory filter stages (including catch-all) to NetworkManager.
     void CommitToNetwork(const std::string& a_networkName,
-                         const std::vector<FilterStage>& a_filters,
-                         RE::FormID a_catchAllFormID);
+                         const std::vector<FilterStage>& a_filters);
 }

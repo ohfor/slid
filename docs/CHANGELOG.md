@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.7] - 2026-03-19
+
+### Fixed
+
+- **Log file and user data written to wrong Documents subfolder** — SLID used a custom path derivation (walking up from the DLL's filesystem path) instead of the standard `SKSE::log::log_directory()`. This produced incorrect folder names for some installs (e.g., "Skyrim Special Edition 489830"), causing SLID.log and user settings to land in a stray directory. Now uses the standard SKSE log directory like every other mod. Also upgraded CommonLibSSE-NG to main HEAD to get the working `log_directory()` implementation (the v3.7.0 release had a broken RELOCATION_ID)
+
+### Changed
+
+- **Catch-all unified into filter pipeline** — catch-all is now a synthetic `__catchall` filter stage (always last, `Matches()` returns `true`), eliminating the separate code path that caused prediction count mismatches across multiple releases. No cosave migration needed — binary format unchanged
+- **Origin row shows total network pool** — the origin row now displays the total item count across all containers in the network (the pre-Sort baseline), with a prediction delta showing how many items would remain in master after Sort. Previously showed only master's live count, which was misleading when items were distributed across containers
+
 ## [1.4.6] - 2026-03-19
 
 ### Fixed

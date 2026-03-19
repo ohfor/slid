@@ -1,4 +1,5 @@
 #include "APIMessaging.h"
+#include "FilterRegistry.h"
 #include "NetworkManager.h"
 
 namespace APIMessaging {
@@ -72,7 +73,7 @@ namespace APIMessaging {
                     NetworkContainersResponse response{};
                     strncpy_s(response.networkName, networkName.c_str(), sizeof(response.networkName) - 1);
                     response.masterFormID = 0;
-                    response.catchAllFormID = 0;
+                    response.catchAllFormID = 0;  // no network found
                     response.filterCount = 0;
 
                     messaging->Dispatch(
@@ -86,12 +87,14 @@ namespace APIMessaging {
                     break;
                 }
 
-                // Collect unique filter-bound container FormIDs
+                // Collect unique filter-bound container FormIDs (excluding catch-all and master)
+                auto catchAllFID = ExtractCatchAllFormID(network->filters);
                 std::vector<RE::FormID> filterContainers;
                 for (const auto& stage : network->filters) {
+                    if (FilterRegistry::IsCatchAll(stage.filterID)) continue;
                     if (stage.containerFormID != 0 &&
                         stage.containerFormID != network->masterFormID &&
-                        stage.containerFormID != network->catchAllFormID)
+                        stage.containerFormID != catchAllFID)
                     {
                         // Check for duplicates
                         bool found = false;
@@ -114,7 +117,7 @@ namespace APIMessaging {
                 auto* response = reinterpret_cast<NetworkContainersResponse*>(buffer.data());
                 strncpy_s(response->networkName, networkName.c_str(), sizeof(response->networkName) - 1);
                 response->masterFormID = network->masterFormID;
-                response->catchAllFormID = network->catchAllFormID;
+                response->catchAllFormID = catchAllFID;
                 response->filterCount = static_cast<std::uint32_t>(filterContainers.size());
 
                 // Copy filter container FormIDs
@@ -131,7 +134,7 @@ namespace APIMessaging {
                 );
 
                 logger::info("APIMessaging: dispatched network '{}' containers (master={:08X}, catchAll={:08X}, {} filters) to {}",
-                    networkName, network->masterFormID, network->catchAllFormID,
+                    networkName, network->masterFormID, catchAllFID,
                     filterContainers.size(), sender);
                 break;
             }

@@ -20,6 +20,8 @@ public:
     /// Used by ScaleformUtil::GetFont() to auto-select the CJK font even when
     /// the game language is set to ENGLISH (common for Chinese users).
     bool HasCJKContent() const { return hasCJK_; }
+    bool IsLoaded() const { return loaded_; }
+    size_t GetKeyCount() const { return translations_.size(); }
 
     /// Look up a translation key (e.g., "$SLID_ErrNoTarget").
     /// Returns the translated value, or the key itself if not found.

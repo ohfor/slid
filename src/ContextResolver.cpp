@@ -18,7 +18,7 @@ namespace ContextResolver {
                         return net.name;
                     }
                 }
-                if (net.catchAllFormID == a_formID) {
+                if (ExtractCatchAllFormID(net.filters) == a_formID) {
                     return net.name;
                 }
             }

@@ -76,8 +76,8 @@ namespace SellOverview {
         }
 
         std::vector<std::string> keywords;
-        buyList->ForEachForm([&](RE::TESForm& form) {
-            auto* kw = form.As<RE::BGSKeyword>();
+        buyList->ForEachForm([&](RE::TESForm* form) {
+            auto* kw = form->As<RE::BGSKeyword>();
             if (kw) {
                 std::string name = kw->GetFormEditorID();
                 // Strip "VendorItem" prefix for readability

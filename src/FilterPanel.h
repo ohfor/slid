@@ -74,7 +74,7 @@ namespace FilterPanel {
     void LoadFromNetwork();  // load network data into panels (call after CatchAllPanel::Init)
     void Destroy();
     void Draw();         // initial row creation, scrollbar, add row
-    bool Update();       // per-frame: animations, count flash, hold-A, hold-remove. Returns true if predictions were recalculated.
+    void Update();       // per-frame: animations, count flash, hold-A, hold-remove
 
     // --- Save/Restore ---
     void SaveState();
@@ -143,8 +143,7 @@ namespace FilterPanel {
     void LoadStages(std::vector<FilterRow::Data> a_stages);
     void SetPredictions(const std::vector<int>& a_filterCounts,
                         const std::vector<int>& a_contestedCounts,
-                        const std::vector<std::unordered_map<size_t, int32_t>>& a_contestedByMaps,
-                        int a_originCount);
+                        const std::vector<std::unordered_map<size_t, int32_t>>& a_contestedByMaps);
     void ClearPredictions();
     void RefreshAfterSort(const std::set<int>& a_flashIndices);
     void RefreshAfterWhoosh();
@@ -168,8 +167,6 @@ namespace FilterPanel {
     void SaveOrchestratorFocus(int a_focusTarget, int a_actionIndex);
 
     // --- Origin panel data ---
-    int GetPredictedOriginCount();
-    void SetPredictedOriginCount(int a_count);
     int GetCurrentOriginCount();
 
 }

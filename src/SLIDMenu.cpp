@@ -133,8 +133,9 @@ namespace SLIDMenu {
         // Initialize CatchAllPanel
         CatchAllPanel::Callbacks catchAllCb{
             [this]() {
-                ConfigState::CommitToNetwork(ConfigState::GetNetworkName(),
-                    FilterPanel::BuildFilterStages(), CatchAllPanel::GetContainerFormID());
+                auto stages = FilterPanel::BuildFilterStages();
+                stages.push_back(FilterStage{FilterRegistry::kCatchAllFilterID, CatchAllPanel::GetContainerFormID()});
+                ConfigState::CommitToNetwork(ConfigState::GetNetworkName(), stages);
             },
             [this]() { RecalcPredictions(); },
             []() { ConfigMenu::Hide(); },
@@ -329,13 +330,24 @@ namespace SLIDMenu {
         auto data = ConfigState::BuildFromNetwork();
 
         if (!data.hasNetwork) {
-            CatchAllPanel::SetCatchAll(data.catchAll.containerName, data.catchAll.containerFormID,
-                                       data.catchAll.location, data.catchAll.count);
+            // Pop catch-all (last entry) for CatchAllPanel
+            if (!data.stages.empty() && FilterRegistry::IsCatchAll(data.stages.back().filterID)) {
+                auto& ca = data.stages.back();
+                CatchAllPanel::SetCatchAll(ca.containerName, ca.containerFormID, ca.location, ca.count);
+                data.stages.pop_back();
+            }
             FilterPanel::BuildDefaultsAndCommit();
             return;
         }
 
-        // Convert to FilterRow::Data
+        // Pop catch-all (last entry) before building filter rows
+        ConfigState::LoadedStage catchAllData;
+        if (!data.stages.empty() && FilterRegistry::IsCatchAll(data.stages.back().filterID)) {
+            catchAllData = std::move(data.stages.back());
+            data.stages.pop_back();
+        }
+
+        // Convert remaining stages to FilterRow::Data
         std::vector<FilterRow::Data> stages;
         stages.reserve(data.stages.size());
         for (auto& s : data.stages) {
@@ -351,8 +363,8 @@ namespace SLIDMenu {
         }
 
         FilterPanel::LoadStages(std::move(stages));
-        CatchAllPanel::SetCatchAll(data.catchAll.containerName, data.catchAll.containerFormID,
-                                   data.catchAll.location, data.catchAll.count);
+        CatchAllPanel::SetCatchAll(catchAllData.containerName, catchAllData.containerFormID,
+                                   catchAllData.location, catchAllData.count);
     }
 
     void ConfigMenu::RecalcPredictions() {
@@ -360,39 +372,52 @@ namespace SLIDMenu {
         auto catchAllFormID = CatchAllPanel::GetContainerFormID();
         auto masterFormID = ConfigState::GetMasterFormID();
 
-        auto prediction = Distributor::PredictDistribution(
-            masterFormID, filters, catchAllFormID);
+        // Append catch-all as the last filter stage for unified pipeline
+        filters.push_back(FilterStage{FilterRegistry::kCatchAllFilterID, catchAllFormID});
 
-        FilterPanel::SetPredictions(prediction.filterCounts, prediction.contestedCounts,
-                                    prediction.contestedByMaps, prediction.originCount);
-        bool catchAllIsMaster = (catchAllFormID == 0 || catchAllFormID == masterFormID);
+        auto prediction = Distributor::PredictDistribution(masterFormID, filters);
 
-        // Sync catch-all base count to pipeline prediction (same approach as
-        // FilterPanel::SetPredictions — avoids false deltas when live container
-        // count diverges from the pipeline's simulated count).
-        if (!catchAllIsMaster && catchAllFormID != 0) {
-            CatchAllPanel::SetCount(prediction.catchAllCount, false);
+        // Pop catch-all prediction (last entry) before passing to FilterPanel
+        int catchAllPrediction = 0;
+        if (!prediction.filterCounts.empty()) {
+            catchAllPrediction = prediction.filterCounts.back();
+            prediction.filterCounts.pop_back();
+            prediction.contestedCounts.pop_back();
+            prediction.contestedByMaps.pop_back();
         }
 
-        CatchAllPanel::SetPrediction(
-            catchAllIsMaster ? prediction.originCount : prediction.catchAllCount,
-            catchAllIsMaster);
-
-        // Predicted master total: unclaimed + Keep-filter claims + catch-all-as-Keep
-        int predictedMasterCount = prediction.originCount;
-        for (size_t i = 0; i < filters.size(); ++i) {
+        // originCount is no longer a separate field — compute it as the sum of
+        // all filter claims routed to master (Keep filters + catch-all-as-Keep)
+        bool catchAllIsMaster = (catchAllFormID == 0 || catchAllFormID == masterFormID);
+        int originCount = 0;  // items staying in master via Keep filters
+        for (size_t i = 0; i < prediction.filterCounts.size(); ++i) {
             if (filters[i].containerFormID == masterFormID) {
-                predictedMasterCount += prediction.filterCounts[i];
+                originCount += prediction.filterCounts[i];
             }
         }
-        if (catchAllIsMaster) {
-            predictedMasterCount += prediction.catchAllCount;
-        }
-        FilterPanel::SetPredictedOriginCount(predictedMasterCount);
 
-        OriginPanel::UpdateCount(uiMovie.get(),
-            FilterPanel::GetCurrentOriginCount(),
-            predictedMasterCount);
+        FilterPanel::SetPredictions(prediction.filterCounts, prediction.contestedCounts,
+                                    prediction.contestedByMaps);
+
+        // Sync catch-all base count to pipeline prediction
+        if (!catchAllIsMaster && catchAllFormID != 0) {
+            CatchAllPanel::SetCount(catchAllPrediction, false);
+        }
+
+        CatchAllPanel::SetPrediction(catchAllPrediction, catchAllIsMaster);
+
+        // Predicted master total: Keep-filter claims + catch-all-as-Keep
+        int predictedMasterCount = originCount;
+        if (catchAllIsMaster) {
+            predictedMasterCount += catchAllPrediction;
+        }
+        // Origin row shows total items across the entire network as the baseline,
+        // with a prediction delta showing how many would remain in master after Sort.
+        int totalPool = 0;
+        for (auto c : prediction.filterCounts) totalPool += c;
+        totalPool += catchAllPrediction;
+
+        OriginPanel::UpdateCount(uiMovie.get(), totalPool, predictedMasterCount);
 
         UpdateGuideText();
     }
@@ -561,18 +586,12 @@ namespace SLIDMenu {
                 logger::debug("ConfigMenu: kShow");
                 return RE::UI_MESSAGE_RESULTS::kHandled;
 
-            case Message::kUpdate: {
-                bool predictionsRecalculated = FilterPanel::Update();
+            case Message::kUpdate:
+                FilterPanel::Update();
                 ActionBar::UpdateFlash();
                 CatchAllPanel::Update();
                 OriginPanel::Update(uiMovie.get());
-                if (predictionsRecalculated) {
-                    OriginPanel::UpdateCount(uiMovie.get(),
-                        FilterPanel::GetCurrentOriginCount(),
-                        FilterPanel::GetPredictedOriginCount());
-                }
                 return RE::UI_MESSAGE_RESULTS::kHandled;
-            }
 
             default:
                 return RE::IMenu::ProcessMessage(a_message);

@@ -80,7 +80,7 @@ string[] _networkNames
 ; =============================================================================
 
 int function GetVersion()
-    return 10406  ; 1.4.6 -> MAJOR*10000 + MINOR*100 + PATCH
+    return 10407  ; 1.4.7 -> MAJOR*10000 + MINOR*100 + PATCH
 endFunction
 
 event OnConfigInit()
@@ -323,15 +323,15 @@ function RenderSalesPage()
             ; Row shows store name with invested indicator
             string valueText = storeName
             if (bonus > 0.0)
-                valueText = storeName + " ($SLID_VendorInvested)"
+                valueText = storeName + " (" + SLID_Native.GetTranslation("$SLID_VendorInvested") + ")"
             endif
 
             ; Info text shows full details
-            string infoText = vendorNames[i] + " - " + storeName + " | Buys: " + categories
+            string infoText = vendorNames[i] + " - " + storeName + " | " + SLID_Native.GetTranslation("$SLID_VendorBuys") + " " + categories
             if (bonus > 0.0)
-                infoText = infoText + " | Invested: +" + (bonus as int) + "% rate"
+                infoText = infoText + " | " + SLID_Native.FormatTranslation("$SLID_VendorInvestedRate", (bonus as int) as string)
             endif
-            infoText = infoText + " | Last visit: " + lastVisit
+            infoText = infoText + " | " + SLID_Native.GetTranslation("$SLID_VendorLastVisit") + " " + lastVisit
             _vendorInfoTexts[i] = infoText
 
             _oidVendors[i] = AddTextOption(vendorNames[i], valueText)
@@ -669,7 +669,7 @@ event OnOptionSelect(int a_option)
     if (a_option == _oidRunSort)
         if (_selectedNetwork != "")
             int moved = SLID_Native.RunSort(_selectedNetwork)
-            ShowMessage("$SLID_SortComplete" + " (" + moved + " items)", false)
+            ShowMessage(SLID_Native.FormatTranslation("$SLID_SortCompleteCount", moved as string), false)
         endif
         return
     endif
@@ -677,7 +677,7 @@ event OnOptionSelect(int a_option)
     if (a_option == _oidRunSweep)
         if (_selectedNetwork != "")
             int gathered = SLID_Native.RunSweep(_selectedNetwork)
-            ShowMessage("$SLID_SweepComplete" + " (" + gathered + " items)", false)
+            ShowMessage(SLID_Native.FormatTranslation("$SLID_SweepCompleteCount", gathered as string), false)
         endif
         return
     endif
@@ -708,7 +708,7 @@ event OnOptionSelect(int a_option)
             ; Check if preset's master is already used by an existing network
             string conflictNet = SLID_Native.GetPresetMasterConflict(presetName)
             if (conflictNet != "")
-                if (!ShowMessage("Preset '" + presetName + "' uses the same Master as your '" + conflictNet + "' link. Do you want to replace your current link?", true))
+                if (!ShowMessage(SLID_Native.FormatTranslation("$SLID_PresetConflict", presetName, conflictNet), true))
                     return
                 endif
                 SLID_Native.RemoveNetwork(conflictNet)
