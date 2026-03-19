@@ -94,14 +94,28 @@ namespace Settings {
     // Returns the full path to SLID.ini next to the DLL
     std::filesystem::path GetINIPath();
 
-    // Returns the full path to SLIDCustom.ini (user overrides, never shipped)
+    // Returns the full path to SLIDCustom.ini next to the DLL (legacy location)
     std::filesystem::path GetCustomINIPath();
 
     // Returns the path to the SLID data subfolder (SKSE/Plugins/SLID/)
     std::filesystem::path GetDataDir();
 
+    // Returns the user data directory: Documents/My Games/{GameFolder}/SKSE/SLID/
+    // VFS-independent — always the real filesystem. User-generated files go here.
+    std::filesystem::path GetUserDataDir();
+
+    // Returns Documents/.../SKSE/SLID/SLIDCustom.ini (new canonical location)
+    std::filesystem::path GetUserCustomINIPath();
+
+    // Returns both data directories: {GetDataDir(), GetUserDataDir()}
+    // Game dir first (mod-author content), user dir second (user overlay).
+    std::vector<std::filesystem::path> GetDataDirs();
+
+    // Returns true if filename matches *slid_*.ini (case-insensitive contains)
+    bool IsDataINI(const std::string& a_filename);
+
     // Load settings from INI. Reads SLID.ini (defaults), then overlays
-    // SLIDCustom.ini (user overrides). Call once after logging is initialized.
+    // SLIDCustom.ini from both legacy and user locations. Call once after logging is initialized.
     void Load();
 
     // Save user-changeable settings to SLIDCustom.ini (never overwrites SLID.ini).

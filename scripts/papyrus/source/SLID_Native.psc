@@ -85,6 +85,7 @@ Function SetShownWelcomeTutorial(bool abShown) global native
 int Function GetNetworkCount() global native
 string[] Function GetNetworkNames() global native
 bool Function IsNetworkActive(string asNetworkName) global native
+string Function GetTranslation(string asKey) global native
 string Function GetNetworkMasterName(string asNetworkName) global native
 int Function RunSort(string asNetworkName) global native
 int Function RunSweep(string asNetworkName) global native

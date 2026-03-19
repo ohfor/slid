@@ -4,7 +4,12 @@ This guide explains how mod authors can integrate their mods with SLID (Skyrim L
 
 ## Overview
 
-SLID automatically discovers INI files matching `*SLID_*.ini` in the `Data/SKSE/Plugins/SLID/` folder. By shipping a simple INI file with your mod, you can:
+SLID automatically discovers INI files matching `*SLID_*.ini` in two locations:
+
+1. **Game data directory** — `Data/SKSE/Plugins/SLID/` (mod-author content, shipped with mods)
+2. **User data directory** — `Documents/My Games/{GameFolder}/SKSE/SLID/` (user-generated content, exported presets)
+
+Game directory files load first, user directory files overlay second. Mod authors should ship INI files in the game data directory as usual. By shipping a simple INI file with your mod, you can:
 
 - Add custom filters that appear in SLID's config menu
 - Filter items by keyword, FormList membership, or other traits
@@ -290,7 +295,7 @@ The easiest way to create a preset is to configure a Link in-game, then export i
 2. Open MCM → Mod Author page
 3. Select your Link from the dropdown
 4. Click "Generate Preset INI"
-5. Find `SLID_GEN_{name}.ini` in `Data/SKSE/Plugins/SLID/`
+5. Find `SLID_GEN_{name}.ini` in `Documents/My Games/{GameFolder}/SKSE/SLID/`
 6. Rename it to `SLID_YourMod.ini` and add a `RequirePlugin` line
 
 The generated file contains all four preset sections with inline comments for readability.

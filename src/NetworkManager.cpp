@@ -767,7 +767,7 @@ static RE::FormID ParseFormIDRef(const std::string& a_ref, RE::TESDataHandler* a
 }
 
 void NetworkManager::LoadConfigFromINI() {
-    auto dir = Settings::GetDataDir();
+    auto dataDirs = Settings::GetDataDirs();
 
     auto* dh = RE::TESDataHandler::GetSingleton();
     if (!dh) {
@@ -783,22 +783,22 @@ void NetworkManager::LoadConfigFromINI() {
     m_presets.clear();
     m_containerLists.clear();
 
-    // Collect matching files, sorted alphabetically
+    // Collect matching files from both directories (game dir first, user dir second)
     std::vector<std::filesystem::path> iniFiles;
-    std::error_code ec;
-    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
-        if (!entry.is_regular_file()) continue;
-        std::string filename;
-        try { filename = entry.path().filename().string(); }
-        catch (const std::system_error&) { continue; }  // skip non-ANSI filenames
-        if (filename.size() < 9) continue;
-        auto lower = filename;
-        std::transform(lower.begin(), lower.end(), lower.begin(),
-            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        if (lower.find("slid_") == std::string::npos || lower.substr(lower.size() - 4) != ".ini") continue;
-        iniFiles.push_back(entry.path());
+    for (const auto& dir : dataDirs) {
+        std::vector<std::filesystem::path> dirFiles;
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (!entry.is_regular_file()) continue;
+            std::string filename;
+            try { filename = entry.path().filename().string(); }
+            catch (const std::system_error&) { continue; }
+            if (!Settings::IsDataINI(filename)) continue;
+            dirFiles.push_back(entry.path());
+        }
+        std::sort(dirFiles.begin(), dirFiles.end());
+        iniFiles.insert(iniFiles.end(), dirFiles.begin(), dirFiles.end());
     }
-    std::sort(iniFiles.begin(), iniFiles.end());
 
     for (const auto& f : iniFiles) {
         try { logger::info("NetworkManager: scanning '{}'", f.filename().string()); }

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.6] - 2026-03-19
+
+### Fixed
+
+- **Networks and display names lost on load when master container's cell is unloaded** — `ValidateNetworks` and `DisplayName::ApplyAll` ran at `kPostLoadGame`, but world-space persistent references aren't in the form table until the first cell loads. Now deferred to `TESCellFullyLoadedEvent` (same pattern already used for new-game init). This was the remaining cause of networks appearing to vanish on reload when the player saved far from their Link containers
+- **MCM Link page showed raw `$SLID_NetworkInactive` key instead of translated text** — SkyUI's MCM string concatenation doesn't resolve `$key` tokens embedded in compound strings. Added `GetTranslation` Papyrus native to resolve translation keys from C++, used for the "(unavailable)" suffix on inactive networks
+- **Unavailable network description blamed non-persistent containers** — reworded `$SLID_NetworkInactiveDesc` to correctly describe the general case (master container not found, mod may have been removed) rather than implying the container was always non-persistent
+
+### Changed
+
+- **User data directory** — user-generated files (`SLIDCustom.ini`, exported preset INIs) now write to `Documents/My Games/{GameFolder}/SKSE/SLID/` instead of the game's `Data/SKSE/Plugins/SLID/` folder. This fixes write permission issues on Program Files installs and MO2/Vortex VFS path mismatches. All 4 INI scanners now search both the game data directory (mod-author content) and the user Documents directory (user-generated content). Existing files in the game directory are still read for backward compatibility — no migration needed
+
 ## [1.4.5] - 2026-03-18
 
 ### Added

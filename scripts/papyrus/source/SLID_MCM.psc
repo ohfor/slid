@@ -80,7 +80,7 @@ string[] _networkNames
 ; =============================================================================
 
 int function GetVersion()
-    return 10405  ; 1.4.5 -> MAJOR*10000 + MINOR*100 + PATCH
+    return 10406  ; 1.4.6 -> MAJOR*10000 + MINOR*100 + PATCH
 endFunction
 
 event OnConfigInit()
@@ -263,7 +263,7 @@ function RenderLinkPage()
     AddHeaderOption("$SLID_HeaderLinkActions")
     string displayName = _selectedNetwork
     if (!isActive)
-        displayName = _selectedNetwork + "$SLID_NetworkInactive"
+        displayName = _selectedNetwork + SLID_Native.GetTranslation("$SLID_NetworkInactive")
     endif
     _oidNetworkSelector = AddMenuOption("$SLID_SelectLink", displayName)
     _oidRunSort = AddTextOption("$SLID_RunSort", "", actionFlag)

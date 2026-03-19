@@ -46,12 +46,13 @@ extern "C" __declspec(dllexport) constinit auto SKSEPlugin_Version = []() {
 }();
 
 namespace {
-    // Deferred new-game initialization.
-    // kNewGame fires before the game world is loaded — the player character
-    // isn't fully available yet and AddSpell/DisplayName operations may fail.
-    // We set a flag on kNewGame and wait for the first TESCellFullyLoadedEvent,
-    // which fires once the starting cell is loaded and the player is in-world.
+    // Deferred initialization flags.
+    // kNewGame and kPostLoadGame fire before world-space persistent references
+    // are available via LookupByID — AddSpell, DisplayName, and ValidateNetworks
+    // all need REFRs that aren't in the form table until the first cell loads.
+    // We set flags and wait for the first TESCellFullyLoadedEvent.
     static std::atomic<bool> g_pendingNewGameInit{false};
+    static std::atomic<bool> g_pendingLoadGameInit{false};
     /// Get the SKSE log directory by deriving the game folder name from the DLL's own path.
     /// SKSE::log::log_directory() uses a relocation that resolves to "Skyrim.INI" instead of
     /// the game folder name, so we derive it from the DLL location instead.
@@ -208,6 +209,28 @@ namespace {
         }
     }
 
+    // Run post-load validation that requires persistent REFRs to be in the form table.
+    // Deferred from kPostLoadGame because LookupByID returns null for world-space
+    // persistent refs until the first cell loads.
+    void LoadGameInit() {
+        logger::info("LoadGameInit: first cell loaded, running deferred validation");
+        auto result = NetworkManager::GetSingleton()->ValidateNetworks();
+        auto vendorsPruned = VendorRegistry::GetSingleton()->Validate();
+        if (result.prunedNetworks > 0 || result.prunedTags > 0 || result.prunedFilters > 0 || result.prunedSell || vendorsPruned > 0) {
+            std::string msg = "SLID: Pruned " +
+                std::to_string(result.prunedNetworks) + " networks, " +
+                std::to_string(result.prunedTags) + " tags, " +
+                std::to_string(result.prunedFilters) + " filters" +
+                (result.prunedSell ? ", sell container" : "") +
+                (vendorsPruned > 0 ? ", " + std::to_string(vendorsPruned) + " vendors" : "") +
+                " (missing mods?)";
+            RE::DebugNotification(msg.c_str());
+            logger::warn("{}", msg);
+        }
+        // Set display names on all SLID containers (master, sell, tagged)
+        DisplayName::ApplyAll();
+    }
+
     // One-shot event sink: waits for first cell load after kNewGame, then runs init
     class CellLoadedHandler : public RE::BSTEventSink<RE::TESCellFullyLoadedEvent> {
     public:
@@ -222,6 +245,9 @@ namespace {
         {
             if (g_pendingNewGameInit.exchange(false)) {
                 NewGameInit();
+            }
+            if (g_pendingLoadGameInit.exchange(false)) {
+                LoadGameInit();
             }
             return RE::BSEventNotifyControl::kContinue;
         }
@@ -276,32 +302,18 @@ namespace {
                 ContextMenu::InputHandler::Register();
                 SCIEIntegration::RegisterListener();
                 APIMessaging::Initialize();
-                // Register cell-loaded sink for deferred new-game init
+                // Register cell-loaded sink for deferred init (new-game + load-game validation)
                 RE::ScriptEventSourceHolder::GetSingleton()
                     ->AddEventSink<RE::TESCellFullyLoadedEvent>(CellLoadedHandler::GetSingleton());
                 break;
 
             case SKSE::MessagingInterface::kPostLoadGame: {
-                logger::info("Game loaded");
+                logger::info("Game loaded — deferring REFR validation to first cell load");
                 WelcomeMenu::ResetSession();
                 SummonChest::Clear();
-                auto result = NetworkManager::GetSingleton()->ValidateNetworks();
-                auto vendorsPruned = VendorRegistry::GetSingleton()->Validate();
-                if (result.prunedNetworks > 0 || result.prunedTags > 0 || result.prunedFilters > 0 || result.prunedSell || vendorsPruned > 0) {
-                    std::string msg = "SLID: Pruned " +
-                        std::to_string(result.prunedNetworks) + " networks, " +
-                        std::to_string(result.prunedTags) + " tags, " +
-                        std::to_string(result.prunedFilters) + " filters" +
-                        (result.prunedSell ? ", sell container" : "") +
-                        (vendorsPruned > 0 ? ", " + std::to_string(vendorsPruned) + " vendors" : "") +
-                        " (missing mods?)";
-                    RE::DebugNotification(msg.c_str());
-                    logger::warn("{}", msg);
-                }
                 // Load network/tag/sell config from INI (mod author presets — only adds missing entries)
+                // Safe here: reads INI data + cosave state, doesn't need LookupByID for REFRs
                 NetworkManager::GetSingleton()->LoadConfigFromINI();
-                // Set display names on all SLID containers (master, sell, tagged)
-                DisplayName::ApplyAll();
                 // Reset vendor dialogue globals (safety — stale values from previous session)
                 ResetVendorGlobals();
 
@@ -315,6 +327,10 @@ namespace {
                     });
                 }
                 GrantPowers();
+                // Defer ValidateNetworks + DisplayName::ApplyAll to first cell load.
+                // LookupByID returns null for world-space persistent REFRs at kPostLoadGame —
+                // they aren't in the form table until the engine loads the first cell.
+                g_pendingLoadGameInit = true;
                 break;
             }
 

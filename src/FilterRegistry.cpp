@@ -189,28 +189,29 @@ namespace {
     // -----------------------------------------------------------------------
 
     static std::vector<FilterDef> ParseFilterINIs() {
-        auto dir = Settings::GetDataDir();
-        if (dir.empty()) {
-            logger::warn("FilterRegistry: could not determine data dir for filter definitions");
+        auto dataDirs = Settings::GetDataDirs();
+        if (dataDirs.empty()) {
+            logger::warn("FilterRegistry: could not determine data dirs for filter definitions");
             return {};
         }
 
-        // Collect matching files, sorted alphabetically for deterministic order
+        // Collect matching files from both directories (game dir first, user dir second)
+        // Sort within each directory for deterministic order
         std::vector<std::filesystem::path> iniFiles;
-        std::error_code ec;
-        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
-            if (!entry.is_regular_file()) continue;
-            std::string filename;
-            try { filename = entry.path().filename().string(); }
-            catch (const std::system_error&) { continue; }  // skip non-ANSI filenames
-            if (filename.size() < 9) continue;  // "SLID_X.ini" minimum
-            auto lower = filename;
-            std::transform(lower.begin(), lower.end(), lower.begin(),
-                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            if (lower.find("slid_") == std::string::npos || lower.substr(lower.size() - 4) != ".ini") continue;
-            iniFiles.push_back(entry.path());
+        for (const auto& dir : dataDirs) {
+            std::vector<std::filesystem::path> dirFiles;
+            std::error_code ec;
+            for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+                if (!entry.is_regular_file()) continue;
+                std::string filename;
+                try { filename = entry.path().filename().string(); }
+                catch (const std::system_error&) { continue; }
+                if (!Settings::IsDataINI(filename)) continue;
+                dirFiles.push_back(entry.path());
+            }
+            std::sort(dirFiles.begin(), dirFiles.end());
+            iniFiles.insert(iniFiles.end(), dirFiles.begin(), dirFiles.end());
         }
-        std::sort(iniFiles.begin(), iniFiles.end());
 
         // Map from filter ID to definition (last writer wins)
         std::unordered_map<std::string, FilterDef> defMap;

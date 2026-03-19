@@ -255,9 +255,9 @@ int VendorRegistry::Validate() {
 }
 
 void VendorRegistry::LoadWhitelist() {
-    auto dir = Settings::GetDataDir();
-    if (dir.empty()) {
-        logger::warn("VendorRegistry::LoadWhitelist: could not determine data dir");
+    auto dataDirs = Settings::GetDataDirs();
+    if (dataDirs.empty()) {
+        logger::warn("VendorRegistry::LoadWhitelist: could not determine data dirs");
         return;
     }
     auto* dh = RE::TESDataHandler::GetSingleton();
@@ -269,18 +269,15 @@ void VendorRegistry::LoadWhitelist() {
     uint32_t totalEntries = 0;
     uint32_t resolved = 0;
 
-    // Scan for all *SLID_*.ini files (same discovery pattern as FilterRegistry/Settings)
-    std::error_code ec;
-    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+    // Scan for all *SLID_*.ini files across both directories
+    for (const auto& dir : dataDirs) {
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
         if (!entry.is_regular_file()) continue;
         std::string filename;
         try { filename = entry.path().filename().string(); }
-        catch (const std::system_error&) { continue; }  // skip non-ANSI filenames
-        if (filename.size() < 9) continue;  // "SLID_X.ini" minimum
-        auto lower = filename;
-        std::transform(lower.begin(), lower.end(), lower.begin(),
-            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        if (lower.find("slid_") == std::string::npos || lower.substr(lower.size() - 4) != ".ini") continue;
+        catch (const std::system_error&) { continue; }
+        if (!Settings::IsDataINI(filename)) continue;
 
         std::ifstream file(entry.path());
         if (!file.is_open()) continue;
@@ -375,6 +372,7 @@ void VendorRegistry::LoadWhitelist() {
             // Silently skip entries whose plugin isn't loaded
         }
     }
+    }  // end dataDirs loop
 
     logger::info("VendorRegistry: vendor whitelist loaded — {}/{} resolved", resolved, totalEntries);
 }

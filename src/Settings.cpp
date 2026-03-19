@@ -1,6 +1,7 @@
 #include "Settings.h"
 
 #include <Windows.h>
+#include <ShlObj.h>
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
@@ -106,6 +107,70 @@ namespace Settings {
         auto ini = GetINIPath();
         if (ini.empty()) return {};
         return ini.parent_path() / "SLID";
+    }
+
+    std::filesystem::path GetUserDataDir() {
+        // Derive game folder name from DLL path (same pattern as GetLogDirectory in main.cpp)
+        HMODULE hModule = nullptr;
+        if (!GetModuleHandleExW(
+                GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                reinterpret_cast<LPCWSTR>(&GetUserDataDir), &hModule)) {
+            return {};
+        }
+
+        wchar_t dllPath[MAX_PATH];
+        if (GetModuleFileNameW(hModule, dllPath, MAX_PATH) == 0) {
+            return {};
+        }
+
+        // DLL path: {GameRoot}\Data\SKSE\Plugins\SLID.dll
+        // Navigate up 4 levels to get game root, then extract folder name
+        std::filesystem::path dllLocation = dllPath;
+        auto gameRoot = dllLocation.parent_path()  // Plugins
+                                   .parent_path()  // SKSE
+                                   .parent_path()  // Data
+                                   .parent_path(); // GameRoot
+        auto gameFolderName = gameRoot.filename();
+
+        // Get Documents folder
+        wchar_t* docPath = nullptr;
+        if (!SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, nullptr, &docPath))) {
+            return {};
+        }
+
+        std::filesystem::path result = docPath;
+        CoTaskMemFree(docPath);
+
+        // Build: Documents\My Games\{GameFolderName}\SKSE\SLID
+        result /= "My Games";
+        result /= gameFolderName;
+        result /= "SKSE";
+        result /= "SLID";
+        return result;
+    }
+
+    std::filesystem::path GetUserCustomINIPath() {
+        auto dir = GetUserDataDir();
+        if (dir.empty()) return {};
+        return dir / "SLIDCustom.ini";
+    }
+
+    std::vector<std::filesystem::path> GetDataDirs() {
+        std::vector<std::filesystem::path> dirs;
+        auto gameDir = GetDataDir();
+        if (!gameDir.empty()) dirs.push_back(gameDir);
+        auto userDir = GetUserDataDir();
+        if (!userDir.empty()) dirs.push_back(userDir);
+        return dirs;
+    }
+
+    bool IsDataINI(const std::string& a_filename) {
+        if (a_filename.size() < 9) return false;  // "SLID_X.ini" minimum
+        auto lower = a_filename;
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return lower.find("slid_") != std::string::npos &&
+               lower.size() >= 4 && lower.substr(lower.size() - 4) == ".ini";
     }
 
     // --- Load ---
@@ -220,11 +285,16 @@ namespace Settings {
         // Load shipped defaults first
         LoadFromFile(basePath);
 
-        // Overlay user overrides (survives mod updates) — mark as dirty
+        // Overlay user overrides from legacy location (next to DLL) — mark as dirty
         LoadFromFile(GetCustomINIPath(), true);
+
+        // Overlay user overrides from Documents (new canonical location, wins over legacy)
+        LoadFromFile(GetUserCustomINIPath(), true);
 
         logger::info("Settings: loaded (debug={}, genericNames={}, sellPrice={:.0f}%)",
                      bDebugLogging, sGenericContainerNames.size(), fSellPricePercent * 100.0f);
+        logger::info("Settings: game data dir = {}", GetDataDir().string());
+        logger::info("Settings: user data dir = {}", GetUserDataDir().string());
     }
 
     // --- Unique Items INI loader ---
@@ -239,9 +309,9 @@ namespace Settings {
     // Entries with a group also go into uniqueItemGroups[group] (child filter).
 
     void LoadUniqueItems() {
-        auto dir = GetDataDir();
-        if (dir.empty()) {
-            logger::warn("Settings::LoadUniqueItems: could not determine data dir");
+        auto dataDirs = GetDataDirs();
+        if (dataDirs.empty()) {
+            logger::warn("Settings::LoadUniqueItems: could not determine data dirs");
             return;
         }
 
@@ -255,24 +325,30 @@ namespace Settings {
         uint32_t resolved = 0;
         uint32_t fileCount = 0;
 
-        // Scan for all SLID_*.ini files
-        std::error_code ec;
-        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
-            if (!entry.is_regular_file()) continue;
+        // Scan for all *SLID_*.ini files across both directories
+        // Game dir first, user dir second (overlay semantic)
+        std::vector<std::filesystem::path> iniFiles;
+        for (const auto& dir : dataDirs) {
+            std::error_code ec;
+            for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+                if (!entry.is_regular_file()) continue;
+                std::string filename;
+                try { filename = entry.path().filename().string(); }
+                catch (const std::system_error&) { continue; }
+                if (!IsDataINI(filename)) continue;
+                iniFiles.push_back(entry.path());
+            }
+        }
+
+        for (const auto& filePath : iniFiles) {
             std::string filename;
-            try { filename = entry.path().filename().string(); }
-            catch (const std::system_error&) { continue; }  // skip non-ANSI filenames
-            // Must start with "SLID_" and end with ".ini" (case-insensitive)
-            if (filename.size() < 9) continue;  // "SLID_X.ini" minimum
-            auto lower = filename;
-            std::transform(lower.begin(), lower.end(), lower.begin(),
-                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            if (lower.substr(0, 5) != "slid_" || lower.substr(lower.size() - 4) != ".ini") continue;
+            try { filename = filePath.filename().string(); }
+            catch (const std::system_error&) { continue; }
 
             logger::info("Settings: loading unique items from {}", filename);
             ++fileCount;
 
-            std::ifstream file(entry.path());
+            std::ifstream file(filePath);
             if (!file.is_open()) continue;
 
             std::string line;
@@ -396,9 +472,18 @@ namespace Settings {
             return;
         }
 
-        auto path = GetCustomINIPath();
+        auto path = GetUserCustomINIPath();
         if (path.empty()) {
             logger::warn("Settings::Save: could not determine custom INI path");
+            return;
+        }
+
+        // Ensure user data directory exists
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+        if (ec) {
+            logger::error("Settings::Save: failed to create directory {}: {}",
+                          path.parent_path().string(), ec.message());
             return;
         }
 

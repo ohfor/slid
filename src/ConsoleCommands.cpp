@@ -994,6 +994,10 @@ namespace ConsoleCommands {
             return !network->masterUnavailable;
         }
 
+        RE::BSFixedString GetTranslation(RE::StaticFunctionTag*, RE::BSFixedString a_key) {
+            return T(a_key.c_str());
+        }
+
         RE::BSFixedString GetNetworkMasterName(RE::StaticFunctionTag*, RE::BSFixedString a_networkName) {
             auto* mgr = NetworkManager::GetSingleton();
             auto* network = mgr->FindNetwork(a_networkName.c_str());
@@ -1529,12 +1533,27 @@ namespace ConsoleCommands {
                 }
             }
 
-            auto dir = Settings::GetDataDir();
+            auto dir = Settings::GetUserDataDir();
+            if (dir.empty()) {
+                logger::error("GeneratePresetINI: GetUserDataDir() returned empty path");
+                return false;
+            }
+
+            // Ensure the user data directory exists (may not on first export)
+            std::error_code ec;
+            std::filesystem::create_directories(dir, ec);
+            if (ec) {
+                logger::error("GeneratePresetINI: failed to create directory {}: {}",
+                              dir.string(), ec.message());
+                return false;
+            }
+
             auto outputPath = dir / fmt::format("SLID_GEN_{}.ini", sanitized);
 
             std::ofstream out(outputPath);
             if (!out.is_open()) {
-                logger::error("GeneratePresetINI: failed to open {}", outputPath.string());
+                logger::error("GeneratePresetINI: failed to open {} (dir={})",
+                              outputPath.string(), dir.string());
                 return false;
             }
 
@@ -2371,6 +2390,7 @@ namespace ConsoleCommands {
         a_vm->RegisterFunction("GetNetworkCount"sv, className, GetNetworkCount);
         a_vm->RegisterFunction("GetNetworkNames"sv, className, GetNetworkNames);
         a_vm->RegisterFunction("IsNetworkActive"sv, className, IsNetworkActive);
+        a_vm->RegisterFunction("GetTranslation"sv, className, GetTranslation);
         a_vm->RegisterFunction("GetNetworkMasterName"sv, className, GetNetworkMasterName);
         a_vm->RegisterFunction("RunSort"sv, className, RunSort);
         a_vm->RegisterFunction("RunSweep"sv, className, RunSweep);
