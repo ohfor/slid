@@ -89,9 +89,13 @@ Matches items with a specific keyword.
 ```ini
 RequireTrait = keyword:VendorItemGem
 RequireTrait = keyword:YourMod_SpecialKW
+RequireTrait = keyword:OCF_WeapTypeSword1H
 ```
 
-Keywords are looked up by EditorID at runtime. Works for vanilla and mod-added keywords.
+Keywords are matched by EditorID string at runtime. Works with:
+- Vanilla and DLC keywords
+- Keywords defined in mod ESPs
+- Keywords distributed dynamically by [KID](https://www.nexusmods.com/skyrimspecialedition/mods/55728) or [OCF](https://www.nexusmods.com/skyrimspecialedition/mods/81469) (no ESP record required)
 
 ### `formlist:EditorID@Plugin.esp`
 
@@ -281,6 +285,41 @@ RequireTrait = keyword:MyMod_WeaponKW
 ExcludeTrait = weapon_type:staff
 ```
 
+### Example 5: Using KID / OCF Keywords
+
+If your users have [Keyword Item Distributor](https://www.nexusmods.com/skyrimspecialedition/mods/55728) (KID) or [Object Categorization Framework](https://www.nexusmods.com/skyrimspecialedition/mods/81469) (OCF) installed, you can build filters on their dynamically distributed keywords — no ESP keyword records needed.
+
+```ini
+; SLID_MyMod.ini
+
+; Route daedric artifacts using OCF's categorization
+[Filter:ocf_daedric]
+Enabled = true
+Display = Daedric Artifacts
+Description = Items classified as daedric artifacts by OCF.
+RequirePlugin = OCF.esp
+RequireTrait = keyword:OCF_ArtifactDaedric
+Parent = unique_items
+```
+
+You can also create a KID config (`YourMod_KID.ini` in `Data/`) to distribute a custom keyword to items, then match on it in your SLID filter:
+
+```ini
+; YourMod_KID.ini — distribute keyword to items
+Keyword = YourMod_SpecialItem|Misc Item|SomeEditorID,AnotherEditorID
+```
+
+```ini
+; SLID_YourMod.ini — match on the distributed keyword
+[Filter:yourmod_special]
+Enabled = true
+Display = Special Items
+Description = Items tagged by YourMod's KID config.
+RequireTrait = keyword:YourMod_SpecialItem
+```
+
+KID-created keywords don't need to exist in any ESP — KID generates them dynamically at startup and SLID detects them at runtime.
+
 ---
 
 ## Pre-configured Links (Presets)
@@ -432,6 +471,19 @@ MyHome.esp|0x001238 = Pantry
 4. **Use `DefaultExclude = true`** for filters containing valuable/unique items users probably don't want auto-sorted.
 
 5. **Test with SLID's MCM** — the Mod Author page has a "Dump Filters" button that logs all loaded filters for debugging.
+
+---
+
+## Testing In-Game
+
+SLID supports **hot reloading** filter definitions. You can edit, add, or remove INI files while the game is running:
+
+1. Make your changes to the INI file(s)
+2. Cast the SLID context power at empty air
+3. A "Reload Filters" option appears at the bottom of the menu
+4. Select it — filter definitions are re-read immediately
+
+No game restart needed. The option only appears when SLID detects file changes since the last load.
 
 ---
 

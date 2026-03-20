@@ -1,178 +1,12 @@
-# SLID Public API Reference
+# SLID API Reference
 
-This document describes the public API for Skyrim Linked Item Distribution (SLID), allowing external mod authors to query SLID's storage network configuration.
+Inter-plugin messaging API for native SKSE plugin authors. Allows other plugins to query SLID's storage network configuration at runtime.
 
-## Overview
-
-SLID exposes its functionality through:
-1. **Papyrus Native Functions** - For script-based mods
-2. **SKSE Messaging** - For native plugin authors (advanced)
-
-The API provides access to:
-- Storage network discovery
-- Network container configuration
-- Tagged container names
+This API is used by [SCIE](https://www.nexusmods.com/skyrimspecialedition/mods/170497) to discover SLID containers for crafting integration.
 
 ---
 
-## Papyrus API
-
-### Script: `SLID_API`
-
-All API functions are global native functions on the `SLID_API` script.
-
----
-
-### Network Discovery
-
-#### `GetNetworkNames`
-
-```papyrus
-string[] Function GetNetworkNames() global native
-```
-
-Returns an array of all storage network names configured in SLID.
-
-**Returns:** Array of network name strings.
-
-**Example:**
-```papyrus
-string[] networks = SLID_API.GetNetworkNames()
-Debug.Trace("SLID has " + networks.Length + " storage networks")
-int i = 0
-while i < networks.Length
-    Debug.Trace("  - " + networks[i])
-    i += 1
-endwhile
-```
-
----
-
-#### `GetNetworkContainerCount`
-
-```papyrus
-int Function GetNetworkContainerCount(string asNetworkName) global native
-```
-
-Gets the number of containers linked in a network.
-
-**Parameters:**
-- `asNetworkName` - The network name to query
-
-**Returns:** Number of containers (master + filter-bound), or `-1` if network not found.
-
----
-
-### Network Containers
-
-#### `GetNetworkMaster`
-
-```papyrus
-ObjectReference Function GetNetworkMaster(string asNetworkName) global native
-```
-
-Gets the master container for a network.
-
-**Parameters:**
-- `asNetworkName` - The network name to query
-
-**Returns:** The master container reference, or `None` if network not found.
-
-**Example:**
-```papyrus
-ObjectReference master = SLID_API.GetNetworkMaster("Breezehome")
-if master
-    Debug.Trace("Master container: " + master.GetDisplayName())
-endif
-```
-
----
-
-#### `GetNetworkContainers`
-
-```papyrus
-ObjectReference[] Function GetNetworkContainers(string asNetworkName) global native
-```
-
-Gets all containers linked in a network (master + filter-bound + catch-all).
-
-**Parameters:**
-- `asNetworkName` - The network name to query
-
-**Returns:** Array of container references, or empty array if network not found.
-
-**Note:** The first element is always the master container. Subsequent elements are filter-bound containers in pipeline order. Duplicates are removed (if catch-all == master, it's not repeated).
-
-**Example:**
-```papyrus
-ObjectReference[] containers = SLID_API.GetNetworkContainers("Breezehome")
-Debug.Trace("Network has " + containers.Length + " containers")
-```
-
----
-
-### Container Info
-
-#### `GetContainerName`
-
-```papyrus
-string Function GetContainerName(ObjectReference akContainer) global native
-```
-
-Gets the display name for a tagged container.
-
-**Parameters:**
-- `akContainer` - The container to query
-
-**Returns:** The custom display name if tagged, or empty string if not tagged.
-
-**Example:**
-```papyrus
-string name = SLID_API.GetContainerName(someChest)
-if name != ""
-    Debug.Trace("Tagged as: " + name)
-else
-    Debug.Trace("Not tagged")
-endif
-```
-
----
-
-#### `IsContainerInNetwork`
-
-```papyrus
-bool Function IsContainerInNetwork(ObjectReference akContainer, string asNetworkName) global native
-```
-
-Checks if a container is linked in a specific network.
-
-**Parameters:**
-- `akContainer` - The container to check
-- `asNetworkName` - The network name to check
-
-**Returns:** `true` if the container is the master, catch-all, or filter-bound in the network.
-
----
-
-### Version Info
-
-#### `GetAPIVersion`
-
-```papyrus
-int Function GetAPIVersion() global native
-```
-
-Gets the SLID API version number.
-
-**Returns:** Version as `major * 100 + minor` (e.g., `100` = v1.0.0)
-
----
-
-## SKSE Messaging (Native Plugins)
-
-For native SKSE plugin authors, SLID provides a messaging interface for C++ integration.
-
-### Registration
+## Registration
 
 Register as a listener for SLID messages during your plugin load:
 
@@ -191,34 +25,27 @@ void GeneralMessageHandler(SKSE::MessagingInterface::Message* a_msg) {
 }
 ```
 
-### Message Types
+---
+
+## Message Types
 
 ```cpp
-namespace SLID::API {
-    enum class MessageType : std::uint32_t {
-        // Requests (send TO SLID)
-        kRequestNetworkList       = 'SLNL',  // Request list of network names
-        kRequestNetworkContainers = 'SLNC',  // Request containers for a network
+enum class MessageType : std::uint32_t {
+    // Requests (send TO SLID)
+    kRequestNetworkList       = 'SLNL',  // Request list of network names
+    kRequestNetworkContainers = 'SLNC',  // Request containers for a network
 
-        // Responses (receive FROM SLID)
-        kResponseNetworkList       = 'SLRL',  // Network name list
-        kResponseNetworkContainers = 'SLRC'   // Container FormID array
-    };
-}
+    // Responses (receive FROM SLID)
+    kResponseNetworkList       = 'SLRL',  // Network name list
+    kResponseNetworkContainers = 'SLRC'   // Container FormID array
+};
 ```
 
-### Request/Response Structures
+---
+
+## Request/Response Structures
 
 ```cpp
-// Network list request - no payload needed
-// Send: Dispatch(kRequestNetworkList, nullptr, 0, "SLID")
-
-// Network list response
-struct NetworkListResponse {
-    uint32_t count;                    // Number of networks
-    // Followed by: count null-terminated UTF-8 strings
-};
-
 // Network containers request
 struct NetworkContainersRequest {
     char networkName[64];              // Null-terminated network name
@@ -234,13 +61,17 @@ struct NetworkContainersResponse {
 };
 ```
 
-### Example: Query Network List
+---
+
+## Querying Network List
+
+Send a `kRequestNetworkList` message with no payload. SLID responds with a `kResponseNetworkList` containing a count followed by null-terminated UTF-8 network name strings.
 
 ```cpp
 void RequestNetworkList() {
     auto* messaging = SKSE::GetMessagingInterface();
     messaging->Dispatch(
-        static_cast<uint32_t>(SLID::API::MessageType::kRequestNetworkList),
+        static_cast<uint32_t>(MessageType::kRequestNetworkList),
         nullptr,
         0,
         "SLID"
@@ -248,7 +79,7 @@ void RequestNetworkList() {
 }
 
 void MyMessageHandler(SKSE::MessagingInterface::Message* msg) {
-    if (msg->type == static_cast<uint32_t>(SLID::API::MessageType::kResponseNetworkList)) {
+    if (msg->type == static_cast<uint32_t>(MessageType::kResponseNetworkList)) {
         auto* data = static_cast<const char*>(msg->data);
         uint32_t count = *reinterpret_cast<const uint32_t*>(data);
         data += sizeof(uint32_t);
@@ -262,16 +93,22 @@ void MyMessageHandler(SKSE::MessagingInterface::Message* msg) {
 }
 ```
 
-### Example: Query Network Containers
+---
+
+## Querying Network Containers
+
+Send a `kRequestNetworkContainers` message with a `NetworkContainersRequest` payload. SLID responds with a `kResponseNetworkContainers` containing the master, catch-all, and filter-bound container FormIDs. If the network is not found, `masterFormID` is 0.
+
+The response excludes duplicate FormIDs — if a container serves multiple filters, or if the catch-all is the master, it appears only once.
 
 ```cpp
 void RequestNetworkContainers(const std::string& networkName) {
-    SLID::API::NetworkContainersRequest request{};
+    NetworkContainersRequest request{};
     strncpy_s(request.networkName, networkName.c_str(), sizeof(request.networkName) - 1);
 
     auto* messaging = SKSE::GetMessagingInterface();
     messaging->Dispatch(
-        static_cast<uint32_t>(SLID::API::MessageType::kRequestNetworkContainers),
+        static_cast<uint32_t>(MessageType::kRequestNetworkContainers),
         &request,
         sizeof(request),
         "SLID"
@@ -279,20 +116,18 @@ void RequestNetworkContainers(const std::string& networkName) {
 }
 
 void MyMessageHandler(SKSE::MessagingInterface::Message* msg) {
-    if (msg->type == static_cast<uint32_t>(SLID::API::MessageType::kResponseNetworkContainers)) {
-        auto* response = static_cast<const SLID::API::NetworkContainersResponse*>(msg->data);
+    if (msg->type == static_cast<uint32_t>(MessageType::kResponseNetworkContainers)) {
+        auto* response = static_cast<const NetworkContainersResponse*>(msg->data);
 
-        // Use networkName to correlate response with pending request
-        logger::info("Response for network '{}':", response->networkName);
-        logger::info("  Master: {:08X}", response->masterFormID);
-        logger::info("  CatchAll: {:08X}", response->catchAllFormID);
-        logger::info("  Filter containers: {}", response->filterCount);
+        logger::info("Network '{}': master={:08X}, catchAll={:08X}, {} filters",
+            response->networkName, response->masterFormID,
+            response->catchAllFormID, response->filterCount);
 
         auto* filterIDs = reinterpret_cast<const RE::FormID*>(
-            static_cast<const char*>(msg->data) + sizeof(SLID::API::NetworkContainersResponse)
+            static_cast<const char*>(msg->data) + sizeof(NetworkContainersResponse)
         );
         for (uint32_t i = 0; i < response->filterCount; ++i) {
-            logger::info("    Filter[{}]: {:08X}", i, filterIDs[i]);
+            logger::info("  Filter[{}]: {:08X}", i, filterIDs[i]);
         }
     }
 }
@@ -300,57 +135,6 @@ void MyMessageHandler(SKSE::MessagingInterface::Message* msg) {
 
 ---
 
-## Use Cases
+## Header Reference
 
-### SCIE Integration
-
-SCIE can query SLID to discover which containers are part of storage networks:
-
-```cpp
-// On crafting session start, ask SLID for network containers
-void OnCraftingStart() {
-    // Get network list
-    RequestNetworkList();
-
-    // Later, after receiving response, query each network
-    for (const auto& name : cachedNetworkNames) {
-        RequestNetworkContainers(name);
-    }
-
-    // Use the container FormIDs to:
-    // - Exclude SLID-managed containers from SCIE's material scanning
-    // - Show network info in SCIE's container list
-    // - Coordinate container state between mods
-}
-```
-
-### Custom Mod Integration
-
-A player home mod can check if its containers are configured in SLID:
-
-```papyrus
-Scriptname MyHomeIntegration extends Quest
-
-Function CheckSLIDSetup()
-    string[] networks = SLID_API.GetNetworkNames()
-
-    int i = 0
-    while i < networks.Length
-        if StringUtil.Find(networks[i], "MyHome") >= 0
-            Debug.Notification("MyHome is configured in SLID!")
-            return
-        endif
-        i += 1
-    endwhile
-
-    Debug.Notification("Tip: Set up MyHome containers in SLID for auto-sorting!")
-EndFunction
-```
-
----
-
-## Version History
-
-| Version | Changes |
-|---------|---------|
-| 1.0.0 | Initial public API release |
+The structs and message types are defined in [`include/APIMessaging.h`](../include/APIMessaging.h). You can copy the enum and structs into your own project — no compile-time dependency on SLID is needed.

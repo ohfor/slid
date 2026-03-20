@@ -435,6 +435,8 @@ namespace FilterPanel {
 
     void Destroy() {
         s_subFocus = SubFocus::kNone;
+        s_isReordering = false;
+        s_liftedFamilyIndex = -1;
         SnapAllAnimations();
         HoldRemove::Destroy();
         // Destroy any open dropdown (owned by FilterRow instances)
@@ -1971,6 +1973,12 @@ namespace FilterPanel {
             // Transition to action bar
             PopulateList();
             return FocusSignal::kToActionBar;
+        }
+
+        // In reorder mode, don't allow navigation past the last filter row
+        if (s_isReordering && newIndex >= displayCount) {
+            PopulateList();
+            return FocusSignal::kNone;
         }
 
         if (s_isReordering && s_liftedFamilyIndex >= 0) {

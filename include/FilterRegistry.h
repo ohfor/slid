@@ -2,6 +2,7 @@
 
 #include "IFilter.h"
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -43,6 +44,12 @@ public:
     /// Used by diagnostics to validate keyword references.
     std::vector<std::string> GetAllTraitStrings() const;
 
+    /// Clear all state and re-parse INI files.
+    void Reload();
+
+    /// Returns true if any SLID_*.ini file has been modified since last load.
+    bool HasPendingChanges() const;
+
     /// Debug: log all registered filters to SKSE log.
     void DumpToLog() const;
 
@@ -59,4 +66,8 @@ private:
 
     // Filter IDs with DefaultExclude = true — excluded from default Whoosh set
     std::unordered_set<std::string> m_defaultExcluded;
+
+    // Change detection — recorded at end of Init()
+    std::filesystem::file_time_type m_lastLoadTime;
+    size_t m_lastFileCount = 0;
 };

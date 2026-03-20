@@ -439,6 +439,17 @@ void FilterRegistry::Init() {
                 return s;
             }());
     }
+
+    // Record load timestamp and file count for change detection
+    m_lastLoadTime = std::filesystem::file_time_type::clock::now();
+    m_lastFileCount = 0;
+    for (const auto& dir : Settings::GetDataDirs()) {
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (entry.is_regular_file() && Settings::IsDataINI(entry.path().filename().string()))
+                ++m_lastFileCount;
+        }
+    }
 }
 
 const IFilter* FilterRegistry::GetFilter(const std::string& a_id) const {
@@ -489,6 +500,32 @@ std::vector<std::string> FilterRegistry::GetAllTraitStrings() const {
         }
     }
     return {unique.begin(), unique.end()};
+}
+
+void FilterRegistry::Reload() {
+    logger::info("FilterRegistry: reloading filter definitions...");
+    m_filters.clear();
+    m_order.clear();
+    m_familyRoots.clear();
+    m_children.clear();
+    m_defaultExcluded.clear();
+    Init();  // Re-parses INIs, rebuilds family index, records new timestamp
+}
+
+bool FilterRegistry::HasPendingChanges() const {
+    size_t count = 0;
+    for (const auto& dir : Settings::GetDataDirs()) {
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (!entry.is_regular_file()) continue;
+            if (!Settings::IsDataINI(entry.path().filename().string())) continue;
+            ++count;
+            std::error_code ec2;
+            auto wt = std::filesystem::last_write_time(entry.path(), ec2);
+            if (!ec2 && wt > m_lastLoadTime) return true;
+        }
+    }
+    return count != m_lastFileCount;  // File added or removed
 }
 
 void FilterRegistry::DumpToLog() const {

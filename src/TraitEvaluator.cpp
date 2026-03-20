@@ -138,16 +138,9 @@ namespace TraitEvaluator {
         auto* kwForm = item->As<RE::BGSKeywordForm>();
         if (!kwForm) return false;
 
-        // Check cache
-        auto it = s_keywordCache.find(suffix);
-        if (it != s_keywordCache.end()) {
-            return it->second && kwForm->HasKeyword(it->second);
-        }
-
-        // Try runtime EditorID lookup and cache
-        auto* kw = RE::TESForm::LookupByEditorID<RE::BGSKeyword>(suffix);
-        s_keywordCache[suffix] = kw;
-        return kw && kwForm->HasKeyword(kw);
+        // String-based match — works with ESP keywords AND dynamically created
+        // keywords (e.g. from Keyword Item Distributor / OCF)
+        return kwForm->HasKeywordString(suffix);
     }
 
     // -----------------------------------------------------------------------
@@ -424,6 +417,12 @@ namespace TraitEvaluator {
         return false;
     }
 
+    void ClearCaches() {
+        s_keywordCache.clear();
+        s_formListCache.clear();
+        s_warnedUnknown.clear();
+    }
+
     uint32_t ValidateKeywords() {
         auto traits = FilterRegistry::GetSingleton()->GetAllTraitStrings();
         uint32_t failures = 0;
@@ -436,22 +435,19 @@ namespace TraitEvaluator {
             }
             auto editorID = trait.substr(kPrefix.size());
 
-            // Check cache first
+            // Try ESP lookup first; if it fails the keyword may be dynamically
+            // created at runtime (e.g. by Keyword Item Distributor / OCF).
+            // HasKeywordString handles both cases at evaluation time.
             auto it = s_keywordCache.find(editorID);
-            if (it != s_keywordCache.end()) {
-                if (!it->second) {
-                    logger::warn("SLID: keyword '{}' in filter trait resolved to null", editorID);
-                    ++failures;
-                }
-                continue;
+            if (it != s_keywordCache.end() && it->second) {
+                continue;  // already resolved via Init pre-cache
             }
 
-            // Try runtime lookup
             auto* kw = RE::TESForm::LookupByEditorID<RE::BGSKeyword>(editorID);
-            s_keywordCache[editorID] = kw;
-            if (!kw) {
-                logger::warn("SLID: keyword '{}' in filter trait resolved to null", editorID);
-                ++failures;
+            if (kw) {
+                s_keywordCache[editorID] = kw;
+            } else {
+                logger::info("SLID: keyword '{}' not in ESP records (may be dynamic/KID)", editorID);
             }
         }
         return failures;

@@ -10,6 +10,7 @@
 #include "TagInputMenu.h"
 #include "Settings.h"
 #include "FilterRegistry.h"
+#include "TraitEvaluator.h"
 #include "TranslationService.h"
 #include "Version.h"
 #include "WelcomeMenu.h"
@@ -2192,6 +2193,15 @@ namespace ConsoleCommands {
         }
     }
 
+    void DoReloadFilters() {
+        TraitEvaluator::ClearCaches();
+        FilterRegistry::GetSingleton()->Reload();
+        TraitEvaluator::Init();
+        TraitEvaluator::ValidateKeywords();
+        RE::DebugNotification(T("$SLID_FiltersReloaded").c_str());
+        logger::info("Filters reloaded by user request");
+    }
+
     /// Dispatch a context action to the appropriate Do* handler.
     void DispatchContextAction(ContextResolver::Action a_action,
                                 const std::string& a_networkName,
@@ -2250,6 +2260,9 @@ namespace ConsoleCommands {
                 break;
             case Action::kWhooshAndRestock:
                 DoWhooshAndRestock(a_networkName);
+                break;
+            case Action::kReloadFilters:
+                DoReloadFilters();
                 break;
         }
     }

@@ -32,7 +32,8 @@ namespace ContextResolver {
         kWhooshConfigure,
         kRestock,
         kRestockConfigure,
-        kWhooshAndRestock
+        kWhooshAndRestock,
+        kReloadFilters
     };
 
     struct ActionEntry {

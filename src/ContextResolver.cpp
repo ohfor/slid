@@ -1,4 +1,5 @@
 #include "ContextResolver.h"
+#include "FilterRegistry.h"
 #include "NetworkManager.h"
 #include "VendorRegistry.h"
 
@@ -77,7 +78,7 @@ namespace ContextResolver {
         }
 
         std::vector<ActionEntry> BuildAirActions() {
-            return {
+            std::vector<ActionEntry> actions = {
                 {Action::kOpen,      "$SLID_CtxOpen",      "$SLID_CtxOpenDesc"},
                 {Action::kWhoosh,    "$SLID_CtxWhoosh",    "$SLID_CtxWhooshDesc"},
                 {Action::kRestock,   "$SLID_CtxRestock",   "$SLID_CtxRestockDesc"},
@@ -87,6 +88,12 @@ namespace ContextResolver {
                 {Action::kConfigure, "$SLID_CtxConfigure", "$SLID_CtxConfigureDesc"},
                 {Action::kDetect,    "$SLID_CtxDetect",    "$SLID_CtxDetectDesc"},
             };
+
+            if (FilterRegistry::GetSingleton()->HasPendingChanges()) {
+                actions.push_back({Action::kReloadFilters, "$SLID_CtxReloadFilters", "$SLID_CtxReloadFiltersDesc"});
+            }
+
+            return actions;
         }
     }
 

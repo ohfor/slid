@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.8] - 2026-03-20
+
+### Added
+
+- **Hot reload filter definitions** — when filter INI files are added, removed, or modified while the game is running, a "Reload Filters" option appears in the air context menu. Selecting it re-reads all filter definitions without restarting. Useful for mod authors iterating on filter configs and users tweaking setups
+- **Keyword Item Distributor (KID) compatibility** — filters using `keyword:` traits now detect dynamically distributed keywords from KID, OCF, and similar runtime keyword mods. Previously only ESP-defined keywords were detected. Uses `HasKeywordString` instead of form pointer lookup
+
+### Fixed
+
+- **Filter reorder cursor escapes past add row** — lifting a filter family and navigating down allowed the cursor to move past the last filter onto the add row and beyond, causing misbehaving UI. Now clamped to the last filter row while in reorder mode
+- **Lifted filter row stays yellow after closing config menu** — the reorder state (`s_isReordering`, `s_liftedFamilyIndex`) was not cleared on menu destroy, so reopening the config menu showed the previously lifted row still highlighted. Both regressions from the catch-all pipeline refactor
+
 ## [1.4.7] - 2026-03-19
 
 ### Fixed

@@ -15,6 +15,10 @@ namespace TraitEvaluator {
     /// Returns false for unknown trait names (logs warning once).
     bool Evaluate(const std::string& traitName, RE::TESBoundObject* item);
 
+    /// Clear runtime caches (keyword, formlist, warned-unknown).
+    /// Call before re-running Init() during hot reload.
+    void ClearCaches();
+
     /// Pre-resolve all keyword: traits found in loaded filter definitions.
     /// Returns count of keywords that failed to resolve (0 = all OK).
     /// Logs warnings for each failed keyword.
