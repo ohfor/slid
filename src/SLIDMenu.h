@@ -26,7 +26,7 @@ namespace SLIDMenu {
         static RE::IMenu* Create();
 
         ConfigMenu();
-        ~ConfigMenu() override = default;
+        ~ConfigMenu() override;
 
         // RE::IMenu overrides
         void PostCreate() override;

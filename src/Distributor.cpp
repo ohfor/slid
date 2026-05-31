@@ -445,24 +445,31 @@ namespace Distributor {
 
         auto* registry = FilterRegistry::GetSingleton();
 
-        // Build worn set: biped slots AND IsWorn() must agree.  Either source alone
-        // can have false positives (stale ExtraWorn from multi-equip mods, or ghost
-        // biped refs for items no longer in inventory).
+        // Build worn set: an item is protected from Whoosh if it is equipped by
+        // EITHER signal — the inventory entry reports IsWorn(), OR it occupies an
+        // actor biped slot.  Requiring BOTH (the previous behaviour) silently
+        // dropped protection for slotless-jewellery frameworks like MARA, which
+        // equip a ring through the normal path (worn flag set) then strip its biped
+        // slot at runtime so additional rings don't collide.  Such a ring is
+        // genuinely worn but absent from the biped array, so the AND failed and the
+        // ring was whooshed off the player's hand.  The union re-admits the benign
+        // false positive the AND was meant to suppress — a stale worn flag merely
+        // leaves an item un-whooshed (it stays in your pocket) — while fixing the
+        // harmful false negative of equipped gear vanishing into a container.
         std::set<RE::FormID> equippedForms;
         {
-            std::set<RE::FormID> bipedForms;
             auto& runtimeData = player->GetActorRuntimeData();
             if (auto biped = runtimeData.biped) {
                 for (std::uint32_t slot = 0; slot < RE::BIPED_OBJECTS::kTotal; ++slot) {
                     if (auto* form = biped->objects[slot].item) {
-                        bipedForms.insert(form->GetFormID());
+                        equippedForms.insert(form->GetFormID());
                     }
                 }
             }
             auto playerInvWorn = player->GetInventory();
             for (auto& [itm, d] : playerInvWorn) {
                 if (!itm || d.first <= 0) continue;
-                if (d.second->IsWorn() && bipedForms.contains(itm->GetFormID())) {
+                if (d.second->IsWorn()) {
                     equippedForms.insert(itm->GetFormID());
                 }
             }
@@ -476,6 +483,16 @@ namespace Distributor {
         std::unordered_set<std::string> effectiveFilters = net->whooshFilters;
         for (const auto& rootID : registry->GetFamilyRoots()) {
             effectiveFilters.erase(rootID);
+        }
+        // Tripwire: a configured, non-empty whoosh set that resolves to zero
+        // matchable filters means every entry was a family root (which we just
+        // erased) — the silent-failure signature of an un-normalised preset
+        // import. Distinguish it in the log from a legitimately empty inventory.
+        if (effectiveFilters.empty() && net->whooshConfigured && !net->whooshFilters.empty()) {
+            logger::warn("Whoosh: network '{}' has {} configured whoosh filter(s) but none "
+                         "survived family-root filtering — matching set is empty (all roots? "
+                         "check whoosh-config normalisation). Nothing will whoosh.",
+                         a_networkName, net->whooshFilters.size());
         }
 
         struct MoveEntry {

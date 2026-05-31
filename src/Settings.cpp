@@ -194,10 +194,6 @@ namespace Settings {
                 } else if (key == "bInterceptActivation") {
                     bInterceptActivation = ParseBool(val, bInterceptActivation); matched = true;
                 }
-            } else if (currentSection == "Powers") {
-                if (key == "bSummonEnabled") {
-                    bSummonEnabled = ParseBool(val, bSummonEnabled); matched = true;
-                }
             } else if (currentSection == "Containers") {
                 if (key == "sGenericContainerNames") {
                     auto parsed = ParseCSV(val);
@@ -467,9 +463,6 @@ namespace Settings {
         if (IsDirty("bShownWelcomeTutorial")) { sw.Ensure("General"); file << "bShownWelcomeTutorial = " << (bShownWelcomeTutorial ? "true" : "false") << "\n"; }
         if (IsDirty("bInterceptActivation"))  { sw.Ensure("General"); file << "bInterceptActivation = " << (bInterceptActivation ? "true" : "false") << "\n"; }
 
-        // [Powers]
-        if (IsDirty("bSummonEnabled")) { sw.Ensure("Powers"); file << "bSummonEnabled = " << (bSummonEnabled ? "true" : "false") << "\n"; }
-
         // [Sales]
         if (IsDirty("fSellPricePercent"))  { sw.Ensure("Sales"); file << "fSellPricePercent = " << std::fixed << std::setprecision(2) << fSellPricePercent << "\n"; }
         if (IsDirty("iSellBatchSize"))     { sw.Ensure("Sales"); file << "iSellBatchSize = " << iSellBatchSize << "\n"; }
@@ -503,12 +496,6 @@ namespace Settings {
     void SetInterceptActivation(bool a_val) {
         bInterceptActivation = a_val;
         MarkDirty("bInterceptActivation");
-        Save();
-    }
-
-    void SetSummonEnabled(bool a_val) {
-        bSummonEnabled = a_val;
-        MarkDirty("bSummonEnabled");
         Save();
     }
 

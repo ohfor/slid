@@ -32,6 +32,10 @@ todo/
 *.log
 replacements.txt
 
+# Python (build script bytecode cache)
+__pycache__/
+*.pyc
+
 # ESP/ESM files from other mods (dropped in for analysis)
 *.esp
 *.esm

@@ -47,6 +47,11 @@ public:
     void Draw(int a_selected, int a_hovered);
     void Destroy();
 
+    // Side-effect-free teardown: drop the cached movie pointer and reset
+    // transient state WITHOUT touching the (possibly-dead) movie. Use on menu
+    // invalidation, where the movie may already have been destroyed.
+    void Invalidate();
+
     // Hold mechanics
     void StartHold(int a_index);
     void UpdateHold();

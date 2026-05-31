@@ -120,6 +120,17 @@ Dropdown& Dropdown::operator=(Dropdown&& a_other) noexcept {
 bool Dropdown::IsAnyOpen() { return s_openInstance != nullptr && s_openInstance->m_open; }
 Dropdown* Dropdown::GetOpen() { return IsAnyOpen() ? s_openInstance : nullptr; }
 
+void Dropdown::InvalidateOpen() {
+    // Pointer-only reset of the open instance — no callback, no GFx. The popup
+    // row clips die with the movie; they're only touched while m_open is true.
+    if (s_openInstance) {
+        s_openInstance->m_movie = nullptr;
+        s_openInstance->m_open = false;
+        s_openInstance->m_callback = nullptr;  // dropped, NOT invoked
+        s_openInstance = nullptr;
+    }
+}
+
 // --- Value access ---
 
 const std::string& Dropdown::GetSelectedId() const { return m_selectedId; }

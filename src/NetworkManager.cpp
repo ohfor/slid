@@ -120,10 +120,30 @@ void NetworkManager::SetWhooshConfig(const std::string& a_networkName, const std
         return;
     }
 
-    net->whooshFilters = a_filters;
+    // Normalise to the child filters that Whoosh actually matches on. A whoosh
+    // config can arrive as family-root IDs (the compact form a preset INI uses)
+    // or as individual child IDs (what the WhooshConfigMenu produces). Whoosh
+    // discards family roots from its matching set (they're UI checkbox helpers),
+    // so any root must be expanded to its children here — this is the single
+    // chokepoint every whoosh-config source passes through. Without it, a
+    // preset-imported config of all roots collapses to an empty matching set and
+    // Whoosh silently reports "nothing to whoosh" (regression from d7f71c7).
+    auto* reg = FilterRegistry::GetSingleton();
+    std::unordered_set<std::string> normalised;
+    for (const auto& id : a_filters) {
+        const auto& children = reg->GetChildren(id);
+        if (!children.empty()) {
+            normalised.insert(children.begin(), children.end());  // family root -> its children
+        } else {
+            normalised.insert(id);                                // leaf / standalone -> as-is
+        }
+    }
+
+    net->whooshFilters = std::move(normalised);
     net->whooshConfigured = true;
 
-    logger::debug("SetWhooshConfig: network '{}' with {} filters", a_networkName, a_filters.size());
+    logger::debug("SetWhooshConfig: network '{}' with {} filters (normalised from {})",
+                  a_networkName, net->whooshFilters.size(), a_filters.size());
 }
 
 void NetworkManager::SetRestockConfig(const std::string& a_networkName, const RestockCategory::RestockConfig& a_config) {
@@ -1242,54 +1262,6 @@ void NetworkManager::ReloadPresets() {
     logger::info("ReloadPresets: {} presets after reload", m_presets.size());
 }
 
-void NetworkManager::DumpToLog() const {
-    std::lock_guard lock(m_lock);
-
-    logger::info("=== SLID Network Dump ===");
-    logger::info("Total networks: {}", m_networks.size());
-
-    for (const auto& net : m_networks) {
-        logger::info("  Network '{}' (master: {:08X}, catchAll: {:08X})",
-                     net.name, net.masterFormID, ExtractCatchAllFormID(net.filters));
-
-        for (size_t i = 0; i < net.filters.size(); ++i) {
-            const auto& f = net.filters[i];
-            if (f.containerFormID != 0) {
-                logger::info("    Filter[{}] '{}' -> {:08X}", i, f.filterID, f.containerFormID);
-            } else {
-                logger::info("    Filter[{}] '{}' -> (unlinked)", i, f.filterID);
-            }
-        }
-    }
-
-    logger::info("Tag registry: {} entries", m_tagRegistry.size());
-    for (const auto& [formID, tag] : m_tagRegistry) {
-        logger::info("  {:08X} = '{}'", formID, tag.customName);
-    }
-
-    logger::info("Recognized mods: {}", m_recognizedMods.size());
-    for (const auto& mod : m_recognizedMods) {
-        logger::info("  {}", mod);
-    }
-
-    logger::info("Sell container: formID={:08X}, items={}, gold={}, timer={}, lastTime={}",
-                 m_sellState.formID, m_sellState.totalItemsSold, m_sellState.totalGoldEarned,
-                 m_sellState.timerStarted, m_sellState.lastSellTime);
-    logger::info("Transaction log: {} entries", m_transactionLog.size());
-
-    logger::info("Presets: {} loaded", m_presets.size());
-    for (const auto& p : m_presets) {
-        bool active = false;
-        for (const auto& net : m_networks) {
-            if (net.name == p.name) { active = true; break; }
-        }
-        logger::info("  Preset '{}' master={:08X} filters={} tags={} whoosh={} active={}",
-                     p.name, p.resolvedMasterFormID, p.filters.size(),
-                     p.tags.size(), p.whooshFilters.size(), active);
-    }
-
-    logger::info("=== End Dump ===");
-}
 
 // --- Presets ---
 

@@ -13,6 +13,12 @@ namespace SellOverview {
 
     static Menu* g_activeMenu = nullptr;
 
+    // Null g_activeMenu if destroyed without a kHide, so input/scroll handlers
+    // can't dereference a freed instance (crash-G class).
+    Menu::~Menu() {
+        if (g_activeMenu == this) g_activeMenu = nullptr;
+    }
+
     // Format game time as "HH:MM (today)" / "HH:MM (1d)" / "HH:MM (2d)" etc.
     static std::string FormatRelativeTime(float a_gameTime) {
         float nowHours = 0.0f;

@@ -5,12 +5,33 @@ All notable changes to this project will be documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.4.9] - 2026-05-31
+
+### Added
+
+- **Leaf Rest preset** — a pre-configured Link for [Leaf Rest](https://www.nexusmods.com/skyrimspecialedition/mods/15191), routing crafting materials, alchemy, enchanting, valuables and books to the home's dedicated containers. Activate from the MCM Link page or by casting Create Link on any container in the home. Weapons, armour and food stay in the master Strong Box (the home has no general weapon/armour storage), and Leaf Rest's per-ingredient cooking containers are left to its own cooking system
+- **User guide** — a complete guide now ships with the project (`docs/Guide.md`, linked from the README): the sorting model (priority, Keep vs Pass, the contest indicator, the catch-all), how to read the config menu, every context-power action, a full 7-page MCM walkthrough, setup and presets, and a troubleshooting FAQ
+
+### Removed
+
+- **"Summon Chest Power" MCM toggle** — removed from the Maintenance page. The summoned-chest feature was retired earlier and the toggle no longer did anything. Remote access to your master is unchanged: cast SLID at nothing and choose Open (or Whoosh / Restock / Sort / Sweep)
+
+### Fixed
+
+- **Equipped rings and amulets whooshed when using slotless jewellery mods (MARA)** — Whoosh's equipped-item guard required an item to both report a worn flag *and* occupy an actor equipment slot before it was protected. [MARA](https://www.nexusmods.com/skyrimspecialedition/mods/173949) makes rings and amulets slotless by stripping their equipment slot at runtime, so genuinely-equipped jewellery failed the slot half of the check and was whooshed off the player into the container. The guard now protects an item equipped by either signal — worn flag or equipment slot — so slotless jewellery stays on your hands. Favourited items were always exempt and were never affected. Reported by RuneZool. (A regression from the earlier change that tightened equipped-item detection to suppress false positives)
+- **Imported presets reported "nothing to whoosh"** — a network preset stores its Whoosh selection as filter-family roots, but Whoosh matches only on the individual child filters within each family, so an imported preset's whoosh set was discarded wholesale and moved nothing even with a full inventory (manual Sort was unaffected). Whoosh configs are now normalised to their child filters at every entry point, and preset export records partial-family selections losslessly. Reported by xLenax. (A regression from a March change to Whoosh family-filter handling)
+- **Master-container and Remove-Link popups could freeze the UI** — with activation interception enabled, the popup shown when activating a Link's master container (and the context power's Remove-Link confirmation) could appear but accept no input, locking the interface until the game was restarted. The popups were being built without the game's message-data factory, leaving them improperly initialised. They are now created correctly and dismiss as expected. Reported by xLenax
+- **Linked container names could show with the wrong letter case** — naming a container the same as a common word the game already had in memory (e.g. "Jewelry", "Clothing") could make the in-world "Search …" prompt display it in a different case ("JEWELRY", "clothing"). The game's text store is case-insensitive and reuses the first spelling it saw; SLID now sidesteps it so your chosen capitalisation is preserved. Reported by parmenidesX
+
 ## [1.4.8] - 2026-03-20
 
 ### Added
 
 - **Hot reload filter definitions** — when filter INI files are added, removed, or modified while the game is running, a "Reload Filters" option appears in the air context menu. Selecting it re-reads all filter definitions without restarting. Useful for mod authors iterating on filter configs and users tweaking setups
 - **Keyword Item Distributor (KID) compatibility** — filters using `keyword:` traits now detect dynamically distributed keywords from KID, OCF, and similar runtime keyword mods. Previously only ESP-defined keywords were detected. Uses `HasKeywordString` instead of form pointer lookup
+- **Niflholm container list** — 29 persistent named storage containers from [Niflholm - Hall Under the Mountain](https://www.nexusmods.com/skyrimspecialedition/mods/8681) available in the container picker. Covers weapons, armor, alchemy, crafting materials, food, books, and household storage. Enable/disable in MCM Compatibility
 
 ### Fixed
 

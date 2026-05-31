@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.21)
 # ---- Versioning ----
 set(VERSION_MAJOR 1)
 set(VERSION_MINOR 4)
-set(VERSION_PATCH 8)
+set(VERSION_PATCH 9)
 
 # ---- Project ----
 project(
@@ -72,7 +72,6 @@ set(SOURCES
     src/Settings.cpp
     src/SalesProcessor.cpp
     src/SellOverviewMenu.cpp
-    src/SummonChest.cpp
     src/FilterRegistry.cpp
     src/TraitEvaluator.cpp
     src/ConfigState.cpp
@@ -133,7 +132,6 @@ set(HEADERS
     include/ScaleformUtil.h
     src/SalesProcessor.h
     src/SellOverviewMenu.h
-    src/SummonChest.h
     include/IFilter.h
     include/FilterRegistry.h
     include/TraitEvaluator.h

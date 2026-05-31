@@ -50,9 +50,6 @@ public:
     /// Returns true if any SLID_*.ini file has been modified since last load.
     bool HasPendingChanges() const;
 
-    /// Debug: log all registered filters to SKSE log.
-    void DumpToLog() const;
-
 private:
     FilterRegistry() = default;
 

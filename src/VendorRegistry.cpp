@@ -385,16 +385,3 @@ size_t VendorRegistry::AllowedVendorCount() const {
     return m_allowedVendors.size();
 }
 
-void VendorRegistry::DumpToLog() const {
-    std::lock_guard lock(m_lock);
-    logger::info("=== Vendor Registry Dump ===");
-    logger::info("Total vendors: {}", m_vendors.size());
-
-    for (const auto& v : m_vendors) {
-        logger::info("  {} ({:08X}) — store: {}, faction: {:08X}, active: {}",
-                     v.vendorName, v.npcBaseFormID, v.storeName, v.factionFormID, v.active);
-        logger::info("    registered: {:.1f}h, lastVisit: {:.1f}h, sold: {}, gold: {}",
-                     v.registrationTime, v.lastVisitTime, v.totalItemsSold, v.totalGoldEarned);
-    }
-    logger::info("=== End Vendor Dump ===");
-}

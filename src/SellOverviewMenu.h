@@ -141,7 +141,7 @@ namespace SellOverview {
         static RE::IMenu* Create();
 
         Menu();
-        ~Menu() override = default;
+        ~Menu() override;
 
         void PostCreate() override;
         RE::UI_MESSAGE_RESULTS ProcessMessage(RE::UIMessage& a_message) override;

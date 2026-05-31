@@ -20,6 +20,22 @@ namespace DisplayName {
         return GetBaseName(a_ref);
     }
 
+    /// Apply a display name to a container, dodging the game's case-insensitive
+    /// BSFixedString string pool.
+    ///
+    /// The pool serves the FIRST casing interned for a given string (comparison
+    /// is case-insensitive). So a bare name like "Clothing" or "Jewelry" can come
+    /// back as "clothing" / "JEWELRY" if that casing was interned earlier in the
+    /// session by some other source (a keyword, vanilla, or another mod). A
+    /// trailing space makes our string unique to the pool, so our exact casing is
+    /// preserved — and it's invisible in the "Search <name>" activator prompt.
+    ///
+    /// (Reported by parmenidesX — Dwemer Pocket Dwelling containers named
+    /// "Jewelry"/"Clothing" rendered as "JEWELRY"/"clothing" once linked.)
+    static void SetPooledDisplayName(RE::TESObjectREFR* a_ref, const std::string& a_name) {
+        a_ref->SetDisplayName((a_name + " ").c_str(), true);
+    }
+
     void Apply(RE::FormID a_formID) {
         if (a_formID == 0) return;
 
@@ -33,7 +49,7 @@ namespace DisplayName {
         if (!networkName.empty()) {
             auto label = GetContainerLabel(a_formID, ref);
             std::string displayName = networkName + ": " + label;
-            ref->SetDisplayName(displayName.c_str(), true);
+            SetPooledDisplayName(ref, displayName);
             logger::debug("DisplayName::Apply: {:08X} -> \"{}\" (master)", a_formID, displayName);
             return;
         }
@@ -42,7 +58,7 @@ namespace DisplayName {
         if (a_formID == mgr->GetSellContainerFormID()) {
             auto label = GetContainerLabel(a_formID, ref);
             std::string displayName = "Sell: " + label;
-            ref->SetDisplayName(displayName.c_str(), true);
+            SetPooledDisplayName(ref, displayName);
             logger::debug("DisplayName::Apply: {:08X} -> \"{}\" (sell)", a_formID, displayName);
             return;
         }
@@ -51,7 +67,7 @@ namespace DisplayName {
         if (mgr->IsTagged(a_formID)) {
             auto tagName = mgr->GetTagName(a_formID);
             if (!tagName.empty()) {
-                ref->SetDisplayName(tagName.c_str(), true);
+                SetPooledDisplayName(ref, tagName);
                 logger::debug("DisplayName::Apply: {:08X} -> \"{}\" (tagged)", a_formID, tagName);
                 return;
             }

@@ -52,9 +52,6 @@ public:
     bool IsAllowedVendor(RE::FormID a_npcBaseFormID) const;
     size_t AllowedVendorCount() const;
 
-    // Debug
-    void DumpToLog() const;
-
     // Record type and version for cosave
     static constexpr uint32_t kVendorRecord  = 'VEND';
     static constexpr uint32_t kVendorVersion = 2;

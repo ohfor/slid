@@ -83,7 +83,7 @@ namespace ContextMenu {
         static constexpr std::string_view FILE_NAME = "SLIDConfig"sv;
 
         Menu();
-        ~Menu() override = default;
+        ~Menu() override;
 
         static void Register();
         static RE::IMenu* Create();

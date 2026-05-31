@@ -8,6 +8,13 @@ namespace ContextMenu {
 
     static Menu* g_activeMenu = nullptr;
 
+    // If this instance is destroyed without a kHide (rapid reopen / hard
+    // eviction), null g_activeMenu so input handlers can't dereference a freed
+    // instance (crash G: rapid context-power reopen).
+    Menu::~Menu() {
+        if (g_activeMenu == this) g_activeMenu = nullptr;
+    }
+
     // =========================================================================
     // Menu
     // =========================================================================

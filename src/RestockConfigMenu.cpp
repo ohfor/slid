@@ -12,6 +12,12 @@ namespace RestockConfig {
     // Active menu instance
     static Menu* g_activeMenu = nullptr;
 
+    // Null g_activeMenu if destroyed without a kHide, so input handlers can't
+    // dereference a freed instance (crash-G class).
+    Menu::~Menu() {
+        if (g_activeMenu == this) g_activeMenu = nullptr;
+    }
+
     // Static state
     Menu::Callback Menu::s_callback;
     RestockCategory::RestockConfig Menu::s_initialConfig;

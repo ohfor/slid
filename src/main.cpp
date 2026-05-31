@@ -10,7 +10,6 @@
 #include "RestockConfigMenu.h"
 #include "SalesProcessor.h"
 #include "SellOverviewMenu.h"
-#include "SummonChest.h"
 #include "FilterRegistry.h"
 #include "TraitEvaluator.h"
 #include "SCIEIntegration.h"
@@ -202,7 +201,6 @@ namespace {
                 RestockConfig::Menu::Register();
                 RestockConfig::InputHandler::Register();
                 SalesProcessor::RegisterEventSinks();
-                SummonChest::RegisterEventSink();
                 SellOverview::Menu::Register();
                 SellOverview::InputHandler::Register();
                 WelcomeMenu::Menu::Register();
@@ -222,7 +220,6 @@ namespace {
                 Lifecycle::TransitionTo(Lifecycle::State::kGameLoading);
                 logger::info("Game loaded — deferring REFR validation to first cell load");
                 WelcomeMenu::ResetSession();
-                SummonChest::Clear();
                 // Load network/tag/sell config from INI (mod author presets — only adds missing entries)
                 // Safe here: reads INI data + cosave state, doesn't need LookupByID for REFRs
                 NetworkManager::GetSingleton()->LoadConfigFromINI();
@@ -272,7 +269,6 @@ namespace {
                 Lifecycle::TransitionTo(Lifecycle::State::kGameLoading);
                 logger::info("New game started — deferring init to first cell load");
                 WelcomeMenu::ResetSession();
-                SummonChest::Clear();
                 // Defer all player-dependent init to first cell load
                 Lifecycle::DeferUntilWorldReady([]() {
                     NetworkManager::GetSingleton()->LoadConfigFromINI();

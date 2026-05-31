@@ -44,6 +44,7 @@ namespace ScaleformUtil {
     void DrawFilledRect(RE::GFxMovieView* a_movie, const char* a_name, int a_depth,
                         double a_x, double a_y, double a_w, double a_h,
                         uint32_t a_color, int a_alpha) {
+        if (!a_movie) return;
         RE::GFxValue root;
         a_movie->GetVariable(&root, "_root");
         if (root.IsUndefined()) return;
@@ -78,6 +79,7 @@ namespace ScaleformUtil {
     void DrawBorderRect(RE::GFxMovieView* a_movie, const char* a_name, int a_depth,
                         double a_x, double a_y, double a_w, double a_h,
                         uint32_t a_color) {
+        if (!a_movie) return;
         RE::GFxValue root;
         a_movie->GetVariable(&root, "_root");
         if (root.IsUndefined()) return;
@@ -111,6 +113,7 @@ namespace ScaleformUtil {
     void DrawLine(RE::GFxMovieView* a_movie, const char* a_name, int a_depth,
                   double a_x1, double a_y1, double a_x2, double a_y2,
                   uint32_t a_color) {
+        if (!a_movie) return;
         RE::GFxValue root;
         a_movie->GetVariable(&root, "_root");
         if (root.IsUndefined()) return;
@@ -138,6 +141,7 @@ namespace ScaleformUtil {
     void CreateLabel(RE::GFxMovieView* a_movie, const char* a_name, int a_depth,
                      double a_x, double a_y, double a_w, double a_h,
                      const char* a_text, int a_size, uint32_t a_color) {
+        if (!a_movie) return;
         RE::GFxValue root;
         a_movie->GetVariable(&root, "_root");
         if (root.IsUndefined()) return;
@@ -191,6 +195,7 @@ namespace ScaleformUtil {
 
     void SetTextFieldFormat(RE::GFxMovieView* a_movie, const std::string& a_path,
                             int a_size, uint32_t a_color) {
+        if (!a_movie) return;
         RE::GFxValue textField;
         a_movie->GetVariable(&textField, a_path.c_str());
 

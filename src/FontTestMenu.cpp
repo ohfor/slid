@@ -6,6 +6,12 @@ namespace FontTestMenu {
 
     static Menu* g_activeMenu = nullptr;
 
+    // Null g_activeMenu if destroyed without a kHide, so input handlers can't
+    // dereference a freed instance (crash-G class).
+    Menu::~Menu() {
+        if (g_activeMenu == this) g_activeMenu = nullptr;
+    }
+
     // Font names — must match embedded font names in SLIDConfig.swf
     static constexpr const char* FONT_INTL = "Noto Sans";                // Latin, Cyrillic, Greek
     static constexpr const char* FONT_CJK  = "Noto Sans CJK SC Regular"; // CJK + Korean

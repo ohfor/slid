@@ -15,9 +15,6 @@ namespace Settings {
     inline bool bShownWelcomeTutorial = false;  // Has user seen the welcome popup?
     inline bool bInterceptActivation = false;  // Intercept master/sell activation with MessageBox
 
-    // --- [Powers] ---
-    inline bool bSummonEnabled = true;
-
     // --- [ContainerPicker] ---
     inline bool bIncludeUnlinkedContainers = false; // Show untagged scanned containers in picker
 
@@ -126,7 +123,6 @@ namespace Settings {
     // bModEnabled and bDebugLogging are global (SLID.ini only) — assign directly.
     void SetShownWelcomeTutorial(bool a_val);
     void SetInterceptActivation(bool a_val);
-    void SetSummonEnabled(bool a_val);
     void SetIncludeUnlinkedContainers(bool a_val);
     void SetSCIEIntegration(bool a_val);
     void SetSCIEIncludeContainers(bool a_val);

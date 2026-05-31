@@ -569,16 +569,42 @@ namespace SLIDMenu {
 
     // --- Menu lifecycle ---
 
+    // Tear down every movie-holding sub-component. Safe while the menu's movie is
+    // alive — both kHide and the destructor body qualify (uiMovie is an IMenu base
+    // member, still valid during ~ConfigMenu). The first four remove their clips;
+    // the rest are pointer-only resets. (Crash #34: a stale movie in the container
+    // Dropdown / a row repopulate after teardown.)
+    static void TearDownSubComponents() {
+        FilterPanel::Destroy();
+        CatchAllPanel::Destroy();
+        OriginPanel::Destroy();
+        ActionBar::Destroy();
+        Dropdown::InvalidateOpen();
+        ConfirmDialog::Invalidate();
+        HoldRemove::Destroy();
+    }
+
+    // Belt-and-braces: if the menu instance is destroyed without a kHide ever
+    // firing (hard eviction / force-close), run the same teardown here so no
+    // sub-component is left holding a dangling GFxMovieView*. uiMovie is still
+    // alive during this derived-class destructor body, so the GFx teardown is
+    // safe. The g_activeMenu == this guard means we only do it when kHide did NOT
+    // already run — otherwise the panels are already torn down and we skip,
+    // avoiding a double teardown (FilterPanel::Destroy is not null-re-entrant).
+    ConfigMenu::~ConfigMenu() {
+        if (g_activeMenu == this) {
+            TearDownSubComponents();
+            g_activeMenu = nullptr;
+        }
+    }
+
     RE::UI_MESSAGE_RESULTS ConfigMenu::ProcessMessage(RE::UIMessage& a_message) {
         using Message = RE::UI_MESSAGE_TYPE;
 
         switch (a_message.type.get()) {
             case Message::kHide:
                 logger::debug("ConfigMenu: kHide");
-                FilterPanel::Destroy();
-                CatchAllPanel::Destroy();
-                OriginPanel::Destroy();
-                ActionBar::Destroy();
+                TearDownSubComponents();
                 g_activeMenu = nullptr;
                 return RE::UI_MESSAGE_RESULTS::kHandled;
 

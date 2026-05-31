@@ -13,8 +13,6 @@ Function RemoveNetwork(string asName) global native
 Function RemoveAllNetworks() global native
 Function RefreshPowers() global native
 Function BeginSellContainer() global native
-Function BeginSummonChest() global native
-Function DespawnSummonChest() global native
 Function BeginContextAction() global native
 Function ShowConfigMenu() global native
 Function HideConfigMenu() global native
@@ -68,9 +66,6 @@ Function SetVendorCost(int aiValue) global native
 ; =============================================================================
 ; MCM Settings - Maintenance
 ; =============================================================================
-
-bool Function GetSummonEnabled() global native
-Function SetSummonEnabled(bool abEnabled) global native
 
 bool Function GetInterceptActivation() global native
 Function SetInterceptActivation(bool abEnabled) global native
@@ -155,9 +150,6 @@ string Function GetPluginVersion() global native
 
 bool Function GeneratePresetINI(string asNetworkName, string asPresetName) global native
 Function BeginGeneratePreset(string asNetworkName) global native
-Function DumpContainers() global native
-Function DumpFilters() global native
-Function DumpVendors() global native
 
 ; =============================================================================
 ; Legacy Functions (deprecated, kept for backwards compatibility)

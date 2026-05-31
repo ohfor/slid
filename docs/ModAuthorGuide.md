@@ -331,11 +331,10 @@ The most powerful integration: ship a complete Link preset that users activate w
 The easiest way to create a preset is to configure a Link in-game, then export it:
 
 1. Set up the Link manually — assign filters, tag containers, configure Whoosh
-2. Open MCM → Mod Author page
-3. Select your Link from the dropdown
-4. Click "Generate Preset INI"
-5. Find `SLID_GEN_{name}.ini` in `Documents/My Games/{GameFolder}/SKSE/SLID/`
-6. Rename it to `SLID_YourMod.ini` and add a `RequirePlugin` line
+2. Open MCM → Presets page
+3. Under **Your Links**, click **Export** next to the Link you want
+4. Find `SLID_GEN_{name}.ini` in `Documents/My Games/{GameFolder}/SKSE/SLID/`
+5. Rename it to `SLID_YourMod.ini` and add a `RequirePlugin` line
 
 The generated file contains all four preset sections with inline comments for readability.
 
@@ -460,6 +459,66 @@ MyHome.esp|0x001238 = Pantry
 
 ---
 
+## Container Persistence
+
+SLID requires that containers referenced in presets, container lists, or tagged containers are **persistent references**. This is the single most important thing to get right when integrating storage containers with SLID.
+
+### Why Persistence Matters
+
+Skyrim only keeps non-persistent references loaded in memory while the player is in the same cell. SLID needs to access your containers from anywhere — the MCM validates containers at save load, the config menu shows container assignments, and Whoosh can route items across the map. If a container reference isn't persistent, `Game.GetFormFromFile()` returns `None` when the player is in a different cell, and SLID marks the Link as unavailable.
+
+**Symptoms of non-persistent containers:**
+- Link works when the player is standing in the same cell as the containers
+- MCM shows the Link as "Unavailable" after loading a save in a different location
+- Context power works near the containers but not remotely
+
+### What Flag to Set
+
+The persistence flag lives on the **placed reference** (REFR record), not on the base Container object (CONT record). This is a common point of confusion — the "Respawns" checkbox on the base Container controls whether the container refills its default inventory, which is unrelated.
+
+**In Creation Kit:**
+1. Open the cell containing your container
+2. Double-click the placed container reference
+3. In the Reference dialog, check **"Persistent Reference"**
+
+**In xEdit:**
+1. Navigate to the REFR record for your placed container (under the Cell → Temporary/Persistent subgroups)
+2. In the Record Flags field, set bit 10 — shown as `Persistent` or `Unknown 10` depending on your xEdit version
+
+### Examples from Real Mods
+
+**LOTD Safehouse** — The "Ingots and Ore" container (`LegacyoftheDragonborn.esm|0x614C0E`) has the Persistent flag set directly on the placed REFR:
+
+```
+Record: REFR 0x614C0E
+Record Flags: Persistent (bit 10)
+Base Object: CONT 0x126388
+```
+
+Every placed container in the LOTD Safehouse cell is set up this way. This is why SLID's LOTD container list works reliably from anywhere in the game.
+
+**Eli's Breezehome** — The base ESP (`Eli_Breezehome.esp`) does *not* set the Persistent flag on its container REFRs:
+
+```
+Record: REFR 0x00092E (Ingots)
+Record Flags: (none)
+Base Object: CONT 0x00092F
+```
+
+On its own, these containers would only be accessible while the player is in the Breezehome cell. However, the separate **Auto Systems addon** (`Eli_Breezehome [ADDON - Auto Systems].esp`) overrides every container REFR and adds the Persistent flag — because its own sorting scripts need cross-cell access to the same containers:
+
+```
+Record: REFR 0x00092E (override from Auto Systems addon)
+Record Flags: Persistent (bit 10)
+```
+
+Without the addon, the containers lack persistence and SLID would show the Link as unavailable when the player is elsewhere.
+
+### Checklist
+
+- [ ] Every container FormID in your preset/container list points to a **placed REFR**, not a base CONT
+- [ ] Every placed REFR has the **Persistent Reference** flag set
+
 ## Best Practices
 
 1. **Use a unique prefix** for your filter IDs (`yourmod_`) to avoid collisions.
@@ -470,7 +529,7 @@ MyHome.esp|0x001238 = Pantry
 
 4. **Use `DefaultExclude = true`** for filters containing valuable/unique items users probably don't want auto-sorted.
 
-5. **Test with SLID's MCM** — the Mod Author page has a "Dump Filters" button that logs all loaded filters for debugging.
+5. **Check `SLID.log`** — on load, SLID logs the full filter registry (every family and its children) and the reason any filter was skipped (disabled, or its `RequirePlugin` ESP not present). It's the quickest way to confirm your filter registered.
 
 ---
 
@@ -495,7 +554,7 @@ No game restart needed. The option only appears when SLID detects file changes s
 - Check SLID.log for parsing errors
 
 **Wrong items matching:**
-- Use SLID's Mod Author > Dump Filters to see how your filter was parsed
+- Check `SLID.log` — the filter registry and any skip reasons are logged on load
 - Verify keyword/FormList EditorIDs are correct
 - Check for typos in trait names
 

@@ -142,6 +142,14 @@ void ButtonBar::Destroy() {
     m_movie = nullptr;
 }
 
+void ButtonBar::Invalidate() {
+    // Pointer-only reset — no GFx, safe when the movie is already gone.
+    m_movie = nullptr;
+    m_holdIndex = -1;
+    m_holdCompleted = -1;
+    m_flashIndex = -1;
+}
+
 // --- Hold mechanics ---
 
 void ButtonBar::StartHold(int a_index) {

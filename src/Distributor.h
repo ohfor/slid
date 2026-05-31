@@ -33,7 +33,7 @@ namespace Distributor {
     const COBJSets& GetCOBJSets();
 
     // Gather all items from pipeline containers back to master (Sort phase 1).
-    // Returns total items moved. Used by summoned chest before opening master.
+    // Returns total items moved.
     uint32_t GatherToMaster(const std::string& a_networkName);
 
     // Run distribution for a named network (must be called on game thread).

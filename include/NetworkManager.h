@@ -164,9 +164,6 @@ public:
     bool IsContainerListEnabled(const std::string& a_name) const;
     void SetContainerListEnabled(const std::string& a_name, bool a_enabled);
 
-    // Debug
-    void DumpToLog() const;
-
 private:
     NetworkManager() = default;
 

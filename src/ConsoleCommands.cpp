@@ -6,7 +6,6 @@
 #include "UIHelper.h"
 #include "Feedback.h"
 #include "SLIDMenu.h"
-#include "SummonChest.h"
 #include "TagInputMenu.h"
 #include "Settings.h"
 #include "FilterRegistry.h"
@@ -564,46 +563,6 @@ namespace ConsoleCommands {
 
         }
 
-        // Legacy path — called from old Summon power (SPEL 0x818).
-        // Active path is DoSummonChest() via context menu (kAir context).
-        void BeginSummonChest(RE::StaticFunctionTag*) {
-            auto* mgr = NetworkManager::GetSingleton();
-            auto names = mgr->GetNetworkNames();
-
-            if (names.empty()) {
-                RE::DebugNotification(T("$SLID_ErrNoNetworks").c_str());
-                return;
-            }
-
-            if (names.size() == 1) {
-                SKSE::GetTaskInterface()->AddTask([name = names[0]]() {
-                    SummonChest::Summon(name);
-                });
-                return;
-            }
-
-            // Multiple networks — MessageBox picker
-            SKSE::GetTaskInterface()->AddTask([names]() {
-                UIHelper::ShowMessageBox(T("$SLID_DlgChooseNetwork"), names,
-                    [names](int idx) {
-                        if (idx >= 0 && idx < static_cast<int>(names.size())) {
-                            auto name = names[idx];
-                            SKSE::GetTaskInterface()->AddTask([name]() {
-                                SummonChest::Summon(name);
-                            });
-                        }
-                    });
-            });
-        }
-
-        void DespawnSummonChest(RE::StaticFunctionTag*) {
-            if (SummonChest::IsActive()) {
-                SKSE::GetTaskInterface()->AddTask([]() {
-                    SummonChest::Despawn();
-                });
-            }
-        }
-
         void OnVendorDialogueAccept() {
             // Get the vendor actor from ActivationHook's tracked state
             auto vendorActorID = ActivationHook::GetLastVendorActorID();
@@ -855,15 +814,6 @@ namespace ConsoleCommands {
                 spdlog::default_logger()->flush_on(spdlog::level::info);
             }
             logger::info("SetDebugLogging: {}", a_enabled);
-        }
-
-        bool GetSummonEnabled(RE::StaticFunctionTag*) {
-            return Settings::bSummonEnabled;
-        }
-
-        void SetSummonEnabled(RE::StaticFunctionTag*, bool a_enabled) {
-            Settings::SetSummonEnabled(a_enabled);
-            logger::info("SetSummonEnabled: {}", a_enabled);
         }
 
         bool GetInterceptActivation(RE::StaticFunctionTag*) {
@@ -1389,25 +1339,6 @@ namespace ConsoleCommands {
         }
 
         // =================================================================
-        // MCM Native Functions - Debug
-        // =================================================================
-
-        void DumpContainers(RE::StaticFunctionTag*) {
-            NetworkManager::GetSingleton()->DumpToLog();
-            logger::info("DumpContainers: logged network state");
-        }
-
-        void DumpFilters(RE::StaticFunctionTag*) {
-            FilterRegistry::GetSingleton()->DumpToLog();
-            logger::info("DumpFilters: logged filter registry");
-        }
-
-        void DumpVendors(RE::StaticFunctionTag*) {
-            VendorRegistry::GetSingleton()->DumpToLog();
-            logger::info("DumpVendors: logged vendor registry");
-        }
-
-        // =================================================================
         // MCM Native Functions - Mod Author Export
         // =================================================================
 
@@ -1700,24 +1631,46 @@ namespace ConsoleCommands {
 
             // --- [Preset:Name:Whoosh] ---
             if (network->whooshConfigured && !network->whooshFilters.empty()) {
-                // Map individual filter IDs back to family roots
+                // Emit the whoosh selection losslessly: a fully-selected family
+                // collapses to its root (compact), a partially-selected family
+                // emits its selected children individually, and standalone
+                // filters emit as-is. Import expands roots back to children, so
+                // this round-trips exactly. (Collapsing everything to roots, as
+                // the old code did, silently widened partial selections to whole
+                // families on re-import.)
                 auto* filterReg = FilterRegistry::GetSingleton();
-                std::set<std::string> rootIDs;  // sorted set for deterministic output
-                for (const auto& filterID : network->whooshFilters) {
-                    auto* filter = filterReg->GetFilter(filterID);
-                    if (!filter) continue;
-                    // Walk to root
-                    const IFilter* current = filter;
-                    while (current->GetParent()) {
-                        current = current->GetParent();
+                const auto& sel = network->whooshFilters;
+                std::set<std::string> lines;             // sorted for deterministic output
+                std::unordered_set<std::string> covered;  // filters accounted for by a family
+
+                for (const auto& rootID : filterReg->GetFamilyRoots()) {
+                    const auto& children = filterReg->GetChildren(rootID);
+                    if (children.empty()) continue;
+                    size_t selected = 0;
+                    for (const auto& c : children) {
+                        covered.insert(c);
+                        if (sel.count(c)) ++selected;
                     }
-                    rootIDs.insert(std::string(current->GetID()));
+                    if (selected == 0) continue;
+                    if (selected == children.size()) {
+                        lines.insert(rootID);                   // whole family -> root
+                    } else {
+                        for (const auto& c : children) {
+                            if (sel.count(c)) lines.insert(c);  // partial -> selected children
+                        }
+                    }
+                }
+                // Standalone selected filters not part of any family
+                for (const auto& id : sel) {
+                    if (covered.count(id)) continue;
+                    if (!filterReg->GetChildren(id).empty()) continue;  // never emit a bare root
+                    lines.insert(id);
                 }
 
-                if (!rootIDs.empty()) {
+                if (!lines.empty()) {
                     out << "[Preset:" << presetName << ":Whoosh]\n";
-                    for (const auto& rootID : rootIDs) {
-                        out << rootID << " = true\n";
+                    for (const auto& line : lines) {
+                        out << line << " = true\n";
                     }
                     out << "\n";
                 }
@@ -2336,8 +2289,6 @@ namespace ConsoleCommands {
         a_vm->RegisterFunction("BeginDeregister"sv, className, BeginDeregister);
         a_vm->RegisterFunction("BeginDetect"sv, className, BeginDetect);
         a_vm->RegisterFunction("BeginSellContainer"sv, className, BeginSellContainer);
-        a_vm->RegisterFunction("BeginSummonChest"sv, className, BeginSummonChest);
-        a_vm->RegisterFunction("DespawnSummonChest"sv, className, DespawnSummonChest);
         a_vm->RegisterFunction("BeginContextAction"sv, className, BeginContextAction);
         a_vm->RegisterFunction("GetMasterNetwork"sv, className, GetMasterNetwork);
         a_vm->RegisterFunction("RemoveNetwork"sv, className, RemoveNetwork);
@@ -2352,8 +2303,6 @@ namespace ConsoleCommands {
         a_vm->RegisterFunction("SetModEnabled"sv, className, SetModEnabled);
         a_vm->RegisterFunction("GetDebugLogging"sv, className, GetDebugLogging);
         a_vm->RegisterFunction("SetDebugLogging"sv, className, SetDebugLogging);
-        a_vm->RegisterFunction("GetSummonEnabled"sv, className, GetSummonEnabled);
-        a_vm->RegisterFunction("SetSummonEnabled"sv, className, SetSummonEnabled);
         a_vm->RegisterFunction("GetInterceptActivation"sv, className, GetInterceptActivation);
         a_vm->RegisterFunction("SetInterceptActivation"sv, className, SetInterceptActivation);
         a_vm->RegisterFunction("GetShownWelcomeTutorial"sv, className, GetShownWelcomeTutorial);
@@ -2430,11 +2379,8 @@ namespace ConsoleCommands {
         // MCM About
         a_vm->RegisterFunction("GetPluginVersion"sv, className, GetPluginVersion);
 
-        // MCM Mod Author / Debug
+        // MCM Mod Author
         a_vm->RegisterFunction("GeneratePresetINI"sv, className, GeneratePresetINI);
-        a_vm->RegisterFunction("DumpContainers"sv, className, DumpContainers);
-        a_vm->RegisterFunction("DumpFilters"sv, className, DumpFilters);
-        a_vm->RegisterFunction("DumpVendors"sv, className, DumpVendors);
 
         // Keep old names registered as stubs so existing saves don't error
         a_vm->RegisterFunction("BeginLinkContainer"sv, className, BeginTagContainer);

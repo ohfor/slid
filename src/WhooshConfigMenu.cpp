@@ -12,6 +12,13 @@ namespace WhooshConfig {
     // Active menu instance
     static Menu* g_activeMenu = nullptr;
 
+    // Null g_activeMenu if destroyed without a kHide, so input handlers can't
+    // dereference a freed instance (crash-G class). Members (grid/buttonBar)
+    // self-destruct with the instance; their clips die with the movie.
+    Menu::~Menu() {
+        if (g_activeMenu == this) g_activeMenu = nullptr;
+    }
+
     // Static state
     Menu::Callback Menu::s_callback;
     std::unordered_set<std::string> Menu::s_initialSet;

@@ -40,7 +40,6 @@ int _oidVendorCost
 int _oidWholesaleDefaults
 
 ; Maintenance page
-int _oidSummonEnabled
 int _oidShowWelcome
 int _oidFontTest
 int _oidGrantPowers
@@ -80,7 +79,7 @@ string[] _networkNames
 ; =============================================================================
 
 int function GetVersion()
-    return 10408  ; 1.4.8 -> MAJOR*10000 + MINOR*100 + PATCH
+    return 10409  ; 1.4.9 -> MAJOR*10000 + MINOR*100 + PATCH
 endFunction
 
 event OnConfigInit()
@@ -174,7 +173,6 @@ function ResetOptionIDs()
     _oidVendorIntervalHours = -1
     _oidVendorCost = -1
     _oidWholesaleDefaults = -1
-    _oidSummonEnabled = -1
     _oidShowWelcome = -1
     _oidFontTest = -1
     _oidGrantPowers = -1
@@ -406,7 +404,6 @@ function RenderMaintenancePage()
     AddEmptyOption()
 
     AddHeaderOption("$SLID_HeaderPowers")
-    _oidSummonEnabled = AddToggleOption("$SLID_SummonEnabled", SLID_Native.GetSummonEnabled())
     _oidGrantPowers = AddTextOption("$SLID_GrantPowers", "")
 
     AddEmptyOption()
@@ -576,13 +573,6 @@ event OnOptionSelect(int a_option)
     if (a_option == _oidDebugLogging)
         bool newVal = !SLID_Native.GetDebugLogging()
         SLID_Native.SetDebugLogging(newVal)
-        SetToggleOptionValue(a_option, newVal)
-        return
-    endif
-
-    if (a_option == _oidSummonEnabled)
-        bool newVal = !SLID_Native.GetSummonEnabled()
-        SLID_Native.SetSummonEnabled(newVal)
         SetToggleOptionValue(a_option, newVal)
         return
     endif
@@ -886,11 +876,6 @@ event OnOptionHighlight(int a_option)
 
     if (a_option == _oidDebugLogging)
         SetInfoText("$SLID_DebugLoggingDesc")
-        return
-    endif
-
-    if (a_option == _oidSummonEnabled)
-        SetInfoText("$SLID_SummonEnabledDesc")
         return
     endif
 

@@ -8,6 +8,12 @@ namespace WelcomeMenu {
     static Menu* g_activeMenu = nullptr;
     static bool s_shownThisSession = false;
 
+    // Null g_activeMenu if destroyed without a kHide, so input handlers can't
+    // dereference a freed instance (crash-G class).
+    Menu::~Menu() {
+        if (g_activeMenu == this) g_activeMenu = nullptr;
+    }
+
     // =========================================================================
     // Menu
     // =========================================================================

@@ -108,6 +108,16 @@ namespace ConfirmDialog {
         }
     }
 
+    void Invalidate() {
+        // Menu teardown: drop all state without firing the callback or touching
+        // the (possibly-dead) movie. The popup clips die with the movie.
+        s_open       = false;
+        s_movie      = nullptr;
+        s_callback   = nullptr;   // dropped, NOT invoked
+        s_hoverIndex = -1;
+        s_bar.Invalidate();
+    }
+
     bool IsOpen() {
         return s_open;
     }

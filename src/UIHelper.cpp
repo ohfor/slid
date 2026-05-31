@@ -3,27 +3,43 @@
 #include "Feedback.h"
 #include "TranslationService.h"
 
-// MessageBoxData::~MessageBoxData is declared override in CommonLibSSE-NG but never defined,
-// because the game provides it at runtime. We need it at link time since we allocate
-// MessageBoxData on the heap. The destructor just needs to run member destructors
-// (BSString, BSTArray, BSTSmartPointer) which all have proper RAII semantics.
-namespace RE {
-    MessageBoxData::~MessageBoxData() = default;
-}
-
 void UIHelper::ShowMessageBox(const std::string& a_body,
                                const std::vector<std::string>& a_buttons,
                                Callback a_callback) {
-    auto* msgBoxData = new RE::MessageBoxData();
-    msgBoxData->bodyText = a_body;
+    // MessageBoxData MUST be created through the game's message-data factory, not
+    // hand-allocated. The factory runs the game's native constructor, which sets
+    // the internal fields (unk38..unk4F) the MessageBoxMenu relies on to handle
+    // button input and dismissal. A raw `new RE::MessageBoxData()` zero-inits
+    // those fields, producing a box that renders but accepts no input and never
+    // closes — the cause of the SLID freeze where the master-activation and
+    // Remove-Link popups locked the UI (reports E & F).
+    auto* factoryManager   = RE::MessageDataFactoryManager::GetSingleton();
+    auto* interfaceStrings = RE::InterfaceStrings::GetSingleton();
+    if (!factoryManager || !interfaceStrings) {
+        logger::error("ShowMessageBox: message-data factory unavailable");
+        return;
+    }
 
+    auto* factory = factoryManager->GetCreator<RE::MessageBoxData>(interfaceStrings->messageBoxData);
+    if (!factory) {
+        logger::error("ShowMessageBox: MessageBoxData creator not found");
+        return;
+    }
+
+    auto* msgBoxData = factory->Create();
+    if (!msgBoxData) {
+        logger::error("ShowMessageBox: MessageBoxData creation failed");
+        return;
+    }
+
+    msgBoxData->bodyText = a_body;
     for (const auto& btn : a_buttons) {
         msgBoxData->buttonText.push_back(btn.c_str());
     }
 
-    auto callback = RE::BSTSmartPointer<RE::IMessageBoxCallback>(
+    msgBoxData->callback = RE::BSTSmartPointer<RE::IMessageBoxCallback>(
         new CallbackAdapter(std::move(a_callback)));
-    msgBoxData->callback = callback;
+
     msgBoxData->QueueMessage();
 }
 

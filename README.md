@@ -137,6 +137,7 @@ MyMod.esp|0xDEF = Armor Chest
 
 ## Documentation
 
+- [User Guide](docs/Guide.md) - Concepts, the sorting model, the config menu, every action
 - [Build Guide](docs/Build.md) - Prerequisites, compilation, deployment
 - [Mod Author Guide](docs/ModAuthorGuide.md) - Custom filters and API
 - [Changelog](docs/CHANGELOG.md) - Version history

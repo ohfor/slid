@@ -71,6 +71,10 @@ public:
     static bool IsAnyOpen();
     static Dropdown* GetOpen();  // nullptr if none open
 
+    // Drop the currently-open dropdown (if any) WITHOUT firing its callback or
+    // touching the movie — for menu teardown when the movie may be destroyed.
+    static void InvalidateOpen();
+
     // Value access
     const std::string& GetSelectedId() const;
     const std::string& GetSelectedLabel() const;

@@ -28,6 +28,10 @@ namespace ConfirmDialog {
     // True if the dialog is currently displayed.
     bool IsOpen();
 
+    // Drop the dialog WITHOUT invoking the callback or touching the movie.
+    // For menu teardown, where the movie may already be destroyed.
+    void Invalidate();
+
     // Navigation (keyboard/gamepad)
     void NavigateLeft();
     void NavigateRight();

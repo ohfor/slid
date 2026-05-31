@@ -528,29 +528,3 @@ bool FilterRegistry::HasPendingChanges() const {
     return count != m_lastFileCount;  // File added or removed
 }
 
-void FilterRegistry::DumpToLog() const {
-    logger::info("=== FilterRegistry Dump ===");
-    logger::info("Total filters: {}", m_filters.size());
-    logger::info("Family roots: {}", m_familyRoots.size());
-
-    for (const auto& rootID : m_familyRoots) {
-        auto* root = GetFilter(rootID);
-        if (!root) continue;
-
-        logger::info("  [{}] {}", rootID, root->GetDisplayName());
-        logger::info("    Description: {}", root->GetDescription());
-
-        const auto& children = GetChildren(rootID);
-        for (const auto& childID : children) {
-            auto* child = GetFilter(childID);
-            if (!child) continue;
-            logger::info("    - [{}] {}", childID, child->GetDisplayName());
-        }
-    }
-
-    logger::info("Default excluded from Whoosh: {}", m_defaultExcluded.size());
-    for (const auto& id : m_defaultExcluded) {
-        logger::info("  - {}", id);
-    }
-    logger::info("=== End FilterRegistry Dump ===");
-}
